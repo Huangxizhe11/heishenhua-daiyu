@@ -49,6 +49,7 @@ class Game {
         this.boss.setVFX(this.vfx);
         this.boss.onPhaseChange = (phase) => {
             this.showPhaseText(LEVELS[this.currentLevel].boss.phaseNames[phase]);
+            this.onBossPhaseChange(phase, LEVELS[this.currentLevel]);
         };
 
         this.bindEvents();
@@ -65,10 +66,6 @@ class Game {
                 p.catch(() => {
                     this.pointerLockFailed = true;
                     console.warn('Pointer lock 不可用，已降级为鼠标拖拽模式');
-                    const hint = document.getElementById('lock-hint');
-                    const dragHint = document.getElementById('drag-hint');
-                    if (hint) hint.style.display = 'none';
-                    if (dragHint && this.gameState === 'playing') dragHint.style.display = 'block';
                 });
             }
         } catch (e) {
@@ -77,7 +74,7 @@ class Game {
     }
 
     bindEvents() {
-        document.getElementById('start-btn').addEventListener('click', () => this.startGame());
+        document.getElementById('start-btn').addEventListener('click', () => { audio.retryBGM(); this.startGame(); });
         document.getElementById('level-select-btn').addEventListener('click', () => {
             document.getElementById('level-select-screen').style.display = 'flex';
         });
@@ -183,18 +180,12 @@ class Game {
 
         document.addEventListener('pointerlockchange', () => {
             if (this.isPaused) return;
-            const hint = document.getElementById('lock-hint');
             if (this.gameState === 'playing') {
                 if (!document.pointerLockElement) {
-                    // 指针锁不可用且已标记失败 → 不弹提示不暂停，降级运行
-                    if (this.pointerLockFailed) {
-                        hint.style.display = 'none';
-                    } else {
-                        hint.style.display = 'block';
+                    // 指针锁不可用且已标记失败 → 降级运行
+                    if (!this.pointerLockFailed) {
                         this.pause();
                     }
-                } else {
-                    hint.style.display = 'none';
                 }
             }
         });
@@ -273,14 +264,9 @@ class Game {
         document.getElementById('skills-bar').style.display = 'flex';
         document.getElementById('poem').style.display = 'block';
         document.getElementById('crosshair').style.display = 'block';
-        // 降级模式显示拖拽提示，否则显示锁定提示
-        if (this.pointerLockFailed) {
-            document.getElementById('lock-hint').style.display = 'none';
-            document.getElementById('drag-hint').style.display = 'block';
-        } else {
-            document.getElementById('lock-hint').style.display = 'block';
-            document.getElementById('drag-hint').style.display = 'none';
-        }
+        // 隐藏提示
+        document.getElementById('lock-hint').style.display = 'none';
+        document.getElementById('drag-hint').style.display = 'none';
 
         audio.init();
         const bgmThemes = ['level1', 'level2', 'level3'];
@@ -294,6 +280,24 @@ class Game {
         setTimeout(() => { this.player.isInvincible = false; }, 1500);
 
         const level = LEVELS[this.currentLevel];
+
+        // 重新配置BOSS模型（不同关卡不同BOSS类型）
+        this.boss.reconfigure(level.boss);
+        this.boss.setVFX(this.vfx);
+        this.boss.onPhaseChange = (phase) => {
+            this.showPhaseText(level.boss.phaseNames[phase]);
+        };
+
+        // 重新配置场景（不同关卡不同环境）
+        this.world.clear();
+        this.world.init(level.world);
+        this.vfx.clear();
+        this.clearLoot();
+        this.scene.fog = new THREE.Fog(level.world.fogColor, CONFIG.world.fogNear, CONFIG.world.fogFar);
+
+        this.player.respawn();
+        this.cameraAngle = 0;
+
         document.getElementById('boss-name').textContent = level.boss.displayName;
         document.getElementById('level-text').textContent = level.subtitle + ' · ' + level.name;
         document.getElementById('level-text').style.display = 'block';
@@ -325,8 +329,106 @@ class Game {
         const el = document.getElementById('phase-text');
         el.textContent = text;
         el.style.opacity = '1';
+        el.style.transform = 'translateX(-50%) scale(1.3)';
         if (this._phaseTextTimer) clearTimeout(this._phaseTextTimer);
-        this._phaseTextTimer = setTimeout(() => { el.style.opacity = '0'; }, 2000);
+        setTimeout(() => { el.style.transform = 'translateX(-50%) scale(1)'; }, 300);
+        this._phaseTextTimer = setTimeout(() => { el.style.opacity = '0'; }, 3000);
+    }
+
+    onBossPhaseChange(phase, level) {
+        // 阶段转换环境变化
+        const bossType = this.boss.bossType;
+
+        // 环境颜色配置
+        const phaseEnvs = {
+            baochai: [
+                { fog: 0x0f0a1a, ambient: 0x1a1a2e, ambientInt: 0.3, point: 0xe94560, pointInt: 0.5 },
+                { fog: 0x1a0a05, ambient: 0x2e1a0a, ambientInt: 0.4, point: 0xff8800, pointInt: 0.8 },
+                { fog: 0x1a0505, ambient: 0x2e0a0a, ambientInt: 0.5, point: 0xff2200, pointInt: 1.2 },
+            ],
+            zhaoyiniang: [
+                { fog: 0x1a0505, ambient: 0x2e1a1a, ambientInt: 0.4, point: 0xff4400, pointInt: 0.5 },
+                { fog: 0x200000, ambient: 0x3e0a0a, ambientInt: 0.5, point: 0xff2200, pointInt: 1.0 },
+                { fog: 0x150000, ambient: 0x4a0000, ambientInt: 0.6, point: 0xff0000, pointInt: 1.5 },
+            ],
+            mirror: [
+                { fog: 0x050510, ambient: 0x1a0a3e, ambientInt: 0.2, point: 0x9932cc, pointInt: 0.5 },
+                { fog: 0x08031a, ambient: 0x200a4e, ambientInt: 0.3, point: 0x7700aa, pointInt: 0.8 },
+                { fog: 0x030008, ambient: 0x2a0050, ambientInt: 0.4, point: 0xff44ff, pointInt: 1.2 },
+            ],
+        };
+
+        const env = (phaseEnvs[bossType] || phaseEnvs.baochai)[phase];
+        if (!env) return;
+
+        // 平滑过渡雾气颜色
+        this._transitionFog(env.fog, 2000);
+
+        // 平滑过渡环境光
+        this._transitionLight('ambient', env.ambient, env.ambientInt, 2000);
+        this._transitionLight('pointLight', env.point, env.pointInt, 2000);
+
+        // 阶段转换全屏闪烁效果
+        this._flashScreen(bossType, phase);
+
+        // 世界环境变化（花瓣、月亮、地面）
+        if (this.world) this.world.setPhaseEnvironment(bossType, phase);
+
+        // BOSS类型专属阶段转换特效
+        if (this.vfx) this.vfx.createPhaseTransitionEffect(this.boss.position.clone(), bossType, phase);
+    }
+
+    _transitionFog(targetColor, duration) {
+        const fog = this.scene.fog;
+        if (!fog) return;
+        const startColor = fog.color.clone();
+        const endColor = new THREE.Color(targetColor);
+        const startTime = Date.now();
+        const animate = () => {
+            const t = Math.min(1, (Date.now() - startTime) / duration);
+            const eased = t * t * (3 - 2 * t); // smoothstep
+            fog.color.lerpColors(startColor, endColor, eased);
+            if (t < 1) requestAnimationFrame(animate);
+        };
+        animate();
+    }
+
+    _transitionLight(name, targetColor, targetIntensity, duration) {
+        const light = this.scene.getObjectByName(name);
+        if (!light) return;
+        const startColor = light.color.clone();
+        const endColor = new THREE.Color(targetColor);
+        const startIntensity = light.intensity;
+        const startTime = Date.now();
+        const animate = () => {
+            const t = Math.min(1, (Date.now() - startTime) / duration);
+            const eased = t * t * (3 - 2 * t);
+            light.color.lerpColors(startColor, endColor, eased);
+            light.intensity = startIntensity + (targetIntensity - startIntensity) * eased;
+            if (t < 1) requestAnimationFrame(animate);
+        };
+        animate();
+    }
+
+    _flashScreen(bossType, phase) {
+        // 创建全屏闪烁overlay
+        const flashColors = {
+            baochai: [0xffd700, 0xff8800, 0xff2200],
+            zhaoyiniang: [0xff4400, 0xff2200, 0xff0000],
+            mirror: [0x9932cc, 0x7700aa, 0xff44ff],
+        };
+        const color = (flashColors[bossType] || flashColors.baochai)[phase];
+        const hexColor = '#' + color.toString(16).padStart(6, '0');
+
+        const flash = document.createElement('div');
+        Object.assign(flash.style, {
+            position: 'fixed', top: '0', left: '0', width: '100%', height: '100%',
+            backgroundColor: hexColor, opacity: '0.4', pointerEvents: 'none',
+            zIndex: '200', transition: 'opacity 1.5s ease-out'
+        });
+        document.body.appendChild(flash);
+        requestAnimationFrame(() => { flash.style.opacity = '0'; });
+        setTimeout(() => flash.remove(), 1600);
     }
 
     animate() {
@@ -678,6 +780,7 @@ class Game {
             this.boss.setVFX(this.vfx);
             this.boss.onPhaseChange = (phase) => {
                 this.showPhaseText(level.boss.phaseNames[phase]);
+                this.onBossPhaseChange(phase, level);
             };
 
             this.world.clear();
@@ -925,6 +1028,7 @@ class Game {
         this.boss.setVFX(this.vfx);
         this.boss.onPhaseChange = (phase) => {
             this.showPhaseText(level.boss.phaseNames[phase]);
+            this.onBossPhaseChange(phase, level);
         };
 
         this.world.clear();
