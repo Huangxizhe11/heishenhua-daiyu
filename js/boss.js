@@ -29,6 +29,10 @@ class Boss {
         this._fireTrailTimer = 0;     // 赵姨娘火焰拖尾计时
         this._mirrorCloneTimer = 0;   // 镜中魔分身计时
         this._mirrorClones = [];      // 镜中魔分身列表
+        this.damageResistance = 0;       // 伤害抗性（0~1）
+        this.weaknessMultiplier = 1;     // 弱点倍率
+        this._phaseTransitioning = false; // 阶段过渡中
+        this._phaseVisualTimer = 0;      // 阶段视觉计时
         this.phaseDialogues = this.config.phaseDialogues || [
             '尔等蝼蚁，岂能撼动本座！',
             '既然执迷不悟，便让你见识真正的力量！',
@@ -55,6 +59,10 @@ class Boss {
         this._hpPulseTime = 0;
         this._animTime = 0;
         this._teleportCooldown = 0;
+        this._zigzagTimer = 0;
+        this._fireTrailTimer = 0;
+        this._mirrorCloneTimer = 0;
+        this._mirrorClones = [];
         this.phaseDialogues = config.phaseDialogues || this.phaseDialogues;
         this.position.set(0, 1.0, -15);
         if (this.mesh) {
@@ -770,7 +778,8 @@ class Boss {
 
         this._animTime += delta;
         if (!this.isStunned) {
-            this.position.y = 1.0 + Math.sin(this._animTime * 1.5) * 0.25;
+            const baseY = this.bossType === 'mirror' ? 1.5 : 1.0;
+            this.position.y = baseY + Math.sin(this._animTime * 1.5) * 0.25;
         }
 
         if (this.isStunned) {
@@ -793,14 +802,34 @@ class Boss {
 
         if (this.phase !== this.lastPhase) {
             this.lastPhase = this.phase;
+            this._phaseTransitioning = true;
+            this._phaseVisualTimer = 0;
+
+            // 阶段转换时短暂无敌+停止攻击
+            this.isAttacking = false;
+            this.isCharging = false;
+            this.attackCooldown = 2.0; // 2秒转换期
+
             audio.playPhaseChange();
             if (this.vfx) {
                 this.vfx.createUltimateEffect(this.position.clone());
                 this.vfx.createPhaseRing(this.position.clone(), this.config.auraColor);
+                this.vfx.triggerScreenShake(0.5, 800);
             }
             if (this.onPhaseChange) this.onPhaseChange(this.phase);
             if (this.vfx && this.phaseDialogues[this.phase]) {
                 this.vfx.createFloatingDialogue(this.position.clone(), this.phaseDialogues[this.phase], this.config.auraColor);
+            }
+
+            // 应用阶段属性变化
+            this.applyPhaseAttributes();
+        }
+
+        // 阶段过渡动画（2秒）
+        if (this._phaseTransitioning) {
+            this._phaseVisualTimer += delta;
+            if (this._phaseVisualTimer >= 2.0) {
+                this._phaseTransitioning = false;
             }
         }
 
@@ -812,10 +841,11 @@ class Boss {
 
         // 阶段视觉
         if (this.aura) {
-            const phaseColors = [this.config.auraColor, 0xff8800, 0xff4444];
-            this.aura.material.color.set(phaseColors[this.phase]);
-            this.aura.rotation.z += delta * (2 + this.phase);
-            const s = 1 + Math.sin(this._animTime * 3) * 0.1;
+            // 阶段颜色由 applyPhaseAttributes 控制，这里只做动画
+            this.aura.rotation.z += delta * (2 + this.phase * 1.5);
+            const pulseSpeed = [3, 4, 6][this.phase] || 3;
+            const pulseAmp = [0.1, 0.15, 0.25][this.phase] || 0.1;
+            const s = 1 + Math.sin(this._animTime * pulseSpeed) * pulseAmp;
             this.aura.scale.set(s, s, 1);
         }
         if (this.groundRing) this.groundRing.rotation.z += delta * 0.8;
@@ -860,50 +890,112 @@ class Boss {
         // === 差异化移动模式 ===
         if (playerPosition && !this.isAttacking) {
             if (this.bossType === 'baochai') {
-                // 宝钗：风筝战术，保持中距离（冷美人不近身缠斗）
                 const dist = this.position.distanceTo(playerPosition);
-                const idealDist = 8 + this.phase * 1.5;
-                const kiteSpeed = (2.5 + this.phase * 1.5) * 0.6;
                 const toPlayer = new THREE.Vector3().subVectors(playerPosition, this.position);
                 toPlayer.y = 0;
                 toPlayer.normalize();
-                if (dist < idealDist - 2) {
-                    // 太近 → 后退
-                    this.position.x -= toPlayer.x * kiteSpeed * delta;
-                    this.position.z -= toPlayer.z * kiteSpeed * delta;
-                } else if (dist > idealDist + 3) {
-                    // 太远 → 缓慢靠近
-                    this.position.x += toPlayer.x * kiteSpeed * 0.5 * delta;
-                    this.position.z += toPlayer.z * kiteSpeed * 0.5 * delta;
+
+                if (this.phase === 0) {
+                    // 冷香初绽：保持中距离风筝
+                    const idealDist = 8;
+                    const kiteSpeed = 2.5 * 0.6;
+                    if (dist < idealDist - 2) {
+                        this.position.x -= toPlayer.x * kiteSpeed * delta;
+                        this.position.z -= toPlayer.z * kiteSpeed * delta;
+                    } else if (dist > idealDist + 3) {
+                        this.position.x += toPlayer.x * kiteSpeed * 0.5 * delta;
+                        this.position.z += toPlayer.z * kiteSpeed * 0.5 * delta;
+                    }
+                    const sideDir = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
+                    const sideSign = Math.sin(this._animTime * 0.7) > 0 ? 1 : -1;
+                    this.position.x += sideDir.x * sideSign * kiteSpeed * 0.4 * delta;
+                    this.position.z += sideDir.z * sideSign * kiteSpeed * 0.4 * delta;
+                } else if (this.phase === 1) {
+                    // 牡丹怒放：中距离游走，偶尔逼近
+                    const idealDist = 6;
+                    const speed = 3.5 * 0.6;
+                    if (dist < idealDist - 1) {
+                        this.position.x -= toPlayer.x * speed * delta;
+                        this.position.z -= toPlayer.z * speed * delta;
+                    } else if (dist > idealDist + 2) {
+                        this.position.x += toPlayer.x * speed * 0.7 * delta;
+                        this.position.z += toPlayer.z * speed * 0.7 * delta;
+                    }
+                    const sideDir = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
+                    const sideSign = Math.sin(this._animTime * 1.2) > 0 ? 1 : -1;
+                    this.position.x += sideDir.x * sideSign * speed * 0.5 * delta;
+                    this.position.z += sideDir.z * sideSign * speed * 0.5 * delta;
+                } else {
+                    // 金锁将碎：疯狂逼近近身
+                    const speed = 5 * 0.7;
+                    if (dist > 3) {
+                        this.position.x += toPlayer.x * speed * delta;
+                        this.position.z += toPlayer.z * speed * delta;
+                    }
+                    // 快速侧移
+                    const sideDir = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
+                    const sideSign = Math.sin(this._animTime * 2.5) > 0 ? 1 : -1;
+                    this.position.x += sideDir.x * sideSign * speed * 0.3 * delta;
+                    this.position.z += sideDir.z * sideSign * speed * 0.3 * delta;
                 }
-                // 侧向滑步（保持移动不站桩）
-                const sideDir = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
-                const sideSign = Math.sin(this._animTime * 0.7) > 0 ? 1 : -1;
-                this.position.x += sideDir.x * sideSign * kiteSpeed * 0.4 * delta;
-                this.position.z += sideDir.z * sideSign * kiteSpeed * 0.4 * delta;
             } else if (this.bossType === 'zhaoyiniang') {
-                // 赵姨娘：Z字乱跑，癫狂无序
                 const dist = this.position.distanceTo(playerPosition);
-                const erraticSpeed = (3.5 + this.phase * 2) * 0.7;
                 const toPlayer = new THREE.Vector3().subVectors(playerPosition, this.position);
                 toPlayer.y = 0;
                 toPlayer.normalize();
-                // 随机切换方向
-                if (!this._zigzagTimer || this._zigzagTimer <= 0) {
-                    this._zigzagDir = Math.random() < 0.5 ? 1 : -1;
-                    this._zigzagTimer = 0.4 + Math.random() * 0.6;
-                }
-                this._zigzagTimer -= delta;
-                const sideDir = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
-                const zigAngle = this._zigzagDir * (0.5 + Math.random() * 0.3);
-                const moveDir = new THREE.Vector3(
-                    toPlayer.x * Math.cos(zigAngle) + sideDir.x * Math.sin(zigAngle),
-                    0,
-                    toPlayer.z * Math.cos(zigAngle) + sideDir.z * Math.sin(zigAngle)
-                );
-                if (dist > 3) {
+
+                if (this.phase === 0) {
+                    // 妒火初燃：Z字乱跑
+                    const erraticSpeed = 3.5 * 0.7;
+                    if (!this._zigzagTimer || this._zigzagTimer <= 0) {
+                        this._zigzagDir = Math.random() < 0.5 ? 1 : -1;
+                        this._zigzagTimer = 0.4 + Math.random() * 0.6;
+                    }
+                    this._zigzagTimer -= delta;
+                    const sideDir = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
+                    const zigAngle = this._zigzagDir * (0.5 + Math.random() * 0.3);
+                    const moveDir = new THREE.Vector3(
+                        toPlayer.x * Math.cos(zigAngle) + sideDir.x * Math.sin(zigAngle),
+                        0,
+                        toPlayer.z * Math.cos(zigAngle) + sideDir.z * Math.sin(zigAngle)
+                    );
+                    if (dist > 3) {
+                        this.position.x += moveDir.x * erraticSpeed * delta;
+                        this.position.z += moveDir.z * erraticSpeed * delta;
+                    }
+                } else if (this.phase === 1) {
+                    // 烈焰焚心：更快Z字+偶尔冲近
+                    const erraticSpeed = 5.5 * 0.7;
+                    if (!this._zigzagTimer || this._zigzagTimer <= 0) {
+                        this._zigzagDir = Math.random() < 0.5 ? 1 : -1;
+                        this._zigzagTimer = 0.2 + Math.random() * 0.4;
+                    }
+                    this._zigzagTimer -= delta;
+                    const sideDir = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
+                    const zigAngle = this._zigzagDir * (0.7 + Math.random() * 0.5);
+                    const moveDir = new THREE.Vector3(
+                        toPlayer.x * Math.cos(zigAngle) + sideDir.x * Math.sin(zigAngle),
+                        0,
+                        toPlayer.z * Math.cos(zigAngle) + sideDir.z * Math.sin(zigAngle)
+                    );
                     this.position.x += moveDir.x * erraticSpeed * delta;
                     this.position.z += moveDir.z * erraticSpeed * delta;
+                } else {
+                    // 灰飞烟灭：疯狂冲向玩家+极速变向
+                    const berserkSpeed = 7 * 0.7;
+                    if (!this._zigzagTimer || this._zigzagTimer <= 0) {
+                        this._zigzagDir = Math.random() < 0.5 ? 1 : -1;
+                        this._zigzagTimer = 0.15 + Math.random() * 0.2;
+                    }
+                    this._zigzagTimer -= delta;
+                    if (dist > 2.5) {
+                        this.position.x += toPlayer.x * berserkSpeed * delta;
+                        this.position.z += toPlayer.z * berserkSpeed * delta;
+                    }
+                    // 极速侧移
+                    const sideDir = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
+                    this.position.x += sideDir.x * this._zigzagDir * berserkSpeed * 0.4 * delta;
+                    this.position.z += sideDir.z * this._zigzagDir * berserkSpeed * 0.4 * delta;
                 }
             }
             // 镜中魔：不行走，纯瞬移（teleportStrikeAttack 处理）
@@ -1024,6 +1116,176 @@ class Boss {
         if (this.eyeLight) this.eyeLight.intensity = 0.4 + Math.sin(this._animTime * 5) * 0.3;
     }
 
+    // ===== 阶段属性应用 =====
+    applyPhaseAttributes() {
+        const phaseConfig = this.config.phases[this.phase];
+        if (!phaseConfig) return;
+
+        // 通用阶段属性
+        this.damageResistance = phaseConfig.damageResistance || 0;
+        this.weaknessMultiplier = phaseConfig.weaknessMultiplier || 1;
+
+        // 类型专属阶段变化
+        if (this.bossType === 'baochai') this.applyBaochaiPhase();
+        else if (this.bossType === 'zhaoyiniang') this.applyZhaoPhase();
+        else if (this.bossType === 'mirror') this.applyMirrorPhase();
+    }
+
+    // 薛宝钗阶段变化
+    applyBaochaiPhase() {
+        if (this.phase === 0) {
+            // 冷香初绽：保持距离，金锁盾完整
+            if (this.lockShield) {
+                this.lockShield.material.opacity = 0.6;
+                this.lockShield.material.emissiveIntensity = 0.5;
+            }
+            if (this.chestLock) this.chestLock.visible = true;
+        } else if (this.phase === 1) {
+            // 牡丹怒放：盾更亮，开始弹反
+            if (this.lockShield) {
+                this.lockShield.material.opacity = 0.8;
+                this.lockShield.material.emissiveIntensity = 0.8;
+                this.lockShield.material.emissive.set(0xff8800);
+            }
+            if (this.aura) this.aura.material.color.set(0xff8800);
+            if (this.body && this.body.material) {
+                this.body.material.emissiveIntensity = 0.3;
+            }
+            // 牡丹冠变红
+            if (this.peonyCrown) this.peonyCrown.traverse(c => {
+                if (c.isMesh && c.material && c.material.emissive) {
+                    c.material.emissive.set(0xff4400);
+                    c.material.emissiveIntensity = 0.6;
+                }
+            });
+        } else if (this.phase === 2) {
+            // 金锁将碎：盾碎裂效果，不再弹反但更凶猛
+            if (this.lockShield) {
+                this.lockShield.material.opacity = 0.3;
+                this.lockShield.material.emissiveIntensity = 1.0;
+                this.lockShield.material.emissive.set(0xff2200);
+                // 盾面出现裂纹效果（通过flatShading变形模拟）
+                this.lockShield.geometry = new THREE.TorusGeometry(1.0, 0.08, 4, 4);
+            }
+            if (this.chestLock) {
+                // 金锁挂饰闪烁不稳
+                this.chestLock.traverse(c => {
+                    if (c.isMesh && c.material && c.material.emissive) {
+                        c.material.emissive.set(0xff4400);
+                    }
+                });
+            }
+            if (this.aura) this.aura.material.color.set(0xff4444);
+            if (this.eyeLight) this.eyeLight.color.set(0xff4444);
+            // 飘纱变红
+            if (this.floatingVeils) this.floatingVeils.forEach(v => {
+                if (v.material) v.material.color.set(0xff4444);
+            });
+        }
+    }
+
+    // 赵姨娘阶段变化
+    applyZhaoPhase() {
+        if (this.phase === 0) {
+            // 妒火初燃：正常移动
+            if (this.aura) this.aura.material.color.set(0xff3300);
+        } else if (this.phase === 1) {
+            // 烈焰焚心：火焰更猛烈
+            if (this.aura) {
+                this.aura.material.color.set(0xff6600);
+                this.aura.material.opacity = 0.6;
+            }
+            if (this.eyeLight) {
+                this.eyeLight.color.set(0xff2200);
+                this.eyeLight.intensity = 1.2;
+            }
+            if (this.fireTrailLight) this.fireTrailLight.intensity = 1.8;
+            // 纸人变红
+            if (this.paperDolls) this.paperDolls.forEach(d => {
+                d.traverse(c => {
+                    if (c.isMesh && c.material && c.material.color) {
+                        if (c.material.color.getHex() === 0xeeeeee) {
+                            c.material.color.set(0xffcccc);
+                        }
+                    }
+                });
+            });
+            // 背后大纸人眼睛更红
+            if (this.backPaperDoll) this.backPaperDoll.traverse(c => {
+                if (c.isMesh && c.material && c.material.color && c.material.color.getHex() === 0xff0000) {
+                    c.material.emissive = new THREE.Color(0xff0000);
+                    c.material.emissiveIntensity = 1.0;
+                }
+            });
+        } else if (this.phase === 2) {
+            // 灰飞烟灭：全身暗红，癫狂
+            if (this.aura) {
+                this.aura.material.color.set(0xcc0000);
+                this.aura.material.opacity = 0.7;
+            }
+            if (this.body && this.body.material) {
+                this.body.material.emissive.set(0xff0000);
+                this.body.material.emissiveIntensity = 0.6;
+            }
+            if (this.eyeLight) {
+                this.eyeLight.color.set(0xff0000);
+                this.eyeLight.intensity = 1.5;
+            }
+            if (this.fireTrailLight) this.fireTrailLight.intensity = 2.5;
+            // 整体前倾加大
+            if (this.mesh) this.mesh.rotation.x = -0.3;
+        }
+    }
+
+    // 镜中魔阶段变化
+    applyMirrorPhase() {
+        if (this.phase === 0) {
+            // 幻境初显：正常紫光
+            if (this.aura) this.aura.material.color.set(0x9932cc);
+        } else if (this.phase === 1) {
+            // 幻境崩塌：深紫+分身
+            if (this.aura) {
+                this.aura.material.color.set(0x7700aa);
+                this.aura.material.opacity = 0.55;
+            }
+            if (this.eyeLight) {
+                this.eyeLight.color.set(0xcc44ff);
+                this.eyeLight.intensity = 1.0;
+            }
+            // 镜面碎片变暗
+            if (this.mirrorShards) this.mirrorShards.forEach(s => {
+                if (s.material) {
+                    s.material.emissiveIntensity = 0.5;
+                }
+            });
+            // 下半身碎片更散
+            if (this.legShards) this.legShards.forEach(s => {
+                if (s.material) s.material.opacity = 0.4;
+            });
+        } else if (this.phase === 2) {
+            // 心魔显形：深黑紫+疯狂
+            if (this.aura) {
+                this.aura.material.color.set(0x440066);
+                this.aura.material.opacity = 0.65;
+            }
+            if (this.eyeLight) {
+                this.eyeLight.color.set(0xff44ff);
+                this.eyeLight.intensity = 1.5;
+            }
+            if (this.mirrorHead && this.mirrorHead.material) {
+                this.mirrorHead.material.emissive.set(0xff00ff);
+                this.mirrorHead.material.emissiveIntensity = 0.8;
+            }
+            // 镜框加速旋转
+            if (this.floatingMirrors) this.floatingMirrors.forEach(f => {
+                if (f.material) {
+                    f.material.emissive.set(0xff44ff);
+                    f.material.emissiveIntensity = 0.8;
+                }
+            });
+        }
+    }
+
     // ===== 差异化被动机制 =====
     updatePassives(delta, playerPosition) {
         if (this.bossType === 'baochai') this.updateBaochaiPassive(delta);
@@ -1034,21 +1296,28 @@ class Boss {
     // 宝钗：金锁盾旋转 + 正面减伤标记
     updateBaochaiPassive(delta) {
         if (this.lockShield) {
-            this.lockShield.rotation.z += delta * 2;
+            const rotSpeed = [2, 3.5, 5][this.phase] || 2;
+            this.lockShield.rotation.z += delta * rotSpeed;
             this.lockShield.rotation.y += delta * 1.5;
-            // 阶段2+盾更亮
             if (this.phase >= 1) {
                 this.lockShield.material.emissiveIntensity = 0.6 + Math.sin(this._animTime * 4) * 0.2;
+            }
+            // 阶段3盾闪烁不稳
+            if (this.phase >= 2) {
+                this.lockShield.material.opacity = 0.2 + Math.sin(this._animTime * 8) * 0.15;
             }
         }
         if (this.lockPattern) {
             this.lockPattern.rotation.z += delta * 0.5;
+            if (this.phase >= 2) {
+                this.lockPattern.material.opacity = 0.2 + Math.sin(this._animTime * 6) * 0.15;
+            }
         }
     }
 
     // 宝钗正面减伤判定（供 main.js takeDamage 前调用）
     isBlockingFront(playerPosition) {
-        if (this.phase < 1) return false; // 阶段2+才触发
+        if (this.phase !== 1) return false; // 仅阶段2触发正面减伤（阶段3盾碎不再减伤）
         if (!playerPosition) return false;
         const toPlayer = new THREE.Vector3().subVectors(playerPosition, this.position);
         toPlayer.y = 0;
@@ -1060,32 +1329,37 @@ class Boss {
 
     // 赵姨娘：移动时留下火焰地面伤害区
     updateZhaoPassive(delta, playerPosition) {
+        const trailInterval = [0.15, 0.08, 0.04][this.phase] || 0.15;
         this._fireTrailTimer -= delta;
         if (this._fireTrailTimer <= 0 && this.vfx && !this.isStunned) {
-            this._fireTrailTimer = 0.15;
-            // 在脚下生成小火焰粒子
+            this._fireTrailTimer = trailInterval;
+            const trailDmg = [15, 22, 35][this.phase] || 15;
             if (this.vfx.createFireTrail) {
-                this.vfx.createFireTrail(this.position.clone(), 15 * (1 + this.phase * 0.3));
+                this.vfx.createFireTrail(this.position.clone(), trailDmg);
             }
         }
-        // 火焰光源闪烁
         if (this.fireTrailLight) {
-            this.fireTrailLight.intensity = 0.8 + Math.sin(this._animTime * 8) * 0.4;
+            const flickerIntensity = [0.8, 1.2, 2.0][this.phase] || 0.8;
+            this.fireTrailLight.intensity = flickerIntensity + Math.sin(this._animTime * 8) * 0.4;
         }
     }
 
     // 镜中魔：阶段2+生成幻影分身
     updateMirrorPassive(delta, playerPosition) {
         if (this.phase < 1 || !this.vfx) return;
+        const cloneInterval = [999, 3.0, 1.5][this.phase] || 999;
+        const cloneDuration = [0, 2, 3][this.phase] || 2;
         this._mirrorCloneTimer -= delta;
         if (this._mirrorCloneTimer <= 0) {
-            this._mirrorCloneTimer = 3 - this.phase * 0.5;
-            // 生成短暂幻影分身
-            const offset = new THREE.Vector3((Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 8);
-            const clonePos = this.position.clone().add(offset);
-            clonePos.y = 1;
-            if (this.vfx.createMirrorClone) {
-                this.vfx.createMirrorClone(clonePos, this.config.auraColor, 2);
+            this._mirrorCloneTimer = cloneInterval;
+            const cloneCount = [0, 1, 3][this.phase] || 1;
+            for (let i = 0; i < cloneCount; i++) {
+                const offset = new THREE.Vector3((Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 8);
+                const clonePos = this.position.clone().add(offset);
+                clonePos.y = 1;
+                if (this.vfx.createMirrorClone) {
+                    this.vfx.createMirrorClone(clonePos, this.config.auraColor, cloneDuration);
+                }
             }
         }
     }
@@ -1103,22 +1377,60 @@ class Boss {
         const distance = this.position.distanceTo(playerPosition);
         const r = Math.random();
 
-        if (distance < 4.5) {
-            if (r < 0.45) return this.meleeAttack();
-            if (r < 0.7) return this.peonyBloomAttack();
-            return this.chargeAttack(playerPosition);
-        } else if (distance < this.config.coldBreathRange) {
-            if (r < 0.5) return this.coldBreathAttack(playerPosition);
-            if (r < 0.75) return this.chargeAttack(playerPosition);
-            return this.peonyBloomAttack();
+        if (this.phase === 0) {
+            // 冷香初绽：风筝战术，保持距离，偶尔近身
+            if (distance < 4.5) {
+                if (r < 0.35) return this.meleeAttack();
+                if (r < 0.65) return this.coldBreathAttack(playerPosition);
+                return this.chargeAttack(playerPosition);
+            } else if (distance < this.config.coldBreathRange) {
+                if (r < 0.55) return this.coldBreathAttack(playerPosition);
+                if (r < 0.8) return this.peonyBloomAttack();
+                return this.chargeAttack(playerPosition);
+            } else {
+                return this.coldBreathAttack(playerPosition);
+            }
+        } else if (this.phase === 1) {
+            // 牡丹怒放：更积极进攻，弹反+牡丹绽放+冷香连发
+            if (distance < 5) {
+                if (r < 0.3) return this.meleeAttack();
+                if (r < 0.6) return this.peonyBloomAttack();
+                return this.coldBreathAttack(playerPosition);
+            } else if (distance < this.config.coldBreathRange) {
+                if (r < 0.35) return this.coldBreathAttack(playerPosition);
+                if (r < 0.65) return this.peonyBloomAttack();
+                if (r < 0.85) return this.chargeAttack(playerPosition);
+                return this.coldBreathAttack(playerPosition);
+            } else {
+                if (r < 0.5) return this.coldBreathAttack(playerPosition);
+                return this.chargeAttack(playerPosition);
+            }
         } else {
-            return this.coldBreathAttack(playerPosition);
+            // 金锁将碎：疯狂近身+双冷香+牡丹连发，不再保持距离
+            if (distance < 5) {
+                if (r < 0.3) return this.meleeAttack();
+                if (r < 0.55) return this.peonyBloomAttack();
+                if (r < 0.8) return this.coldBreathAttack(playerPosition);
+                return this.chargeAttack(playerPosition);
+            } else {
+                // 远距离也冲过来
+                if (r < 0.4) return this.chargeAttack(playerPosition);
+                if (r < 0.7) return this.coldBreathAttack(playerPosition);
+                // 双冷香：连续释放两发
+                this.coldBreathAttack(playerPosition);
+                return this.coldBreathAttack(playerPosition);
+            }
         }
     }
 
     meleeAttack() {
         this.isAttacking = true;
-        this.attackCooldown = 1.5 - this.phase * 0.3;
+        const cooldowns = {
+            baochai: [1.5, 1.2, 0.8],
+            zhaoyiniang: [1.3, 1.0, 0.6],
+            mirror: [1.4, 1.1, 0.7]
+        };
+        this.attackCooldown = (cooldowns[this.bossType] || cooldowns.baochai)[this.phase] || 1.5;
         // 赵姨娘利爪声 vs 通用攻击声
         if (this.bossType === 'zhaoyiniang') audio.playClawAttack();
         else audio.playBossAttack();
@@ -1401,11 +1713,11 @@ class Boss {
             this.mesh.position.copy(this.position);
         }
 
-        this.mesh.children.forEach(child => {
-            if (child.material && child.material.color) {
+        this.mesh.traverse(child => {
+            if (child.isMesh && child.material && child.material.color) {
                 const orig = child.material.color.clone();
                 child.material.color.set(0xffffff);
-                setTimeout(() => { if (child.material) child.material.color.copy(orig); }, 80);
+                setTimeout(() => { try { child.material.color.copy(orig); } catch(e) {} }, 80);
             }
         });
 

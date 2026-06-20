@@ -81,41 +81,6 @@ class AudioManager {
     }
 
     playSkill() {
-        this.playTone(260, 0.25, 'sine', 0.2);
-        setTimeout(() => this.playTone(330, 0.2, 'sine', 0.15), 100);
-        setTimeout(() => this.playTone(392, 0.15, 'sine', 0.1), 200);
-    }
-
-    playUltimate() {
-        for (let i = 0; i < 5; i++) {
-            setTimeout(() => {
-                this.playTone(165 + i * 55, 0.35, 'triangle', 0.15);
-            }, i * 100);
-        }
-    }
-
-    playDash() {
-        this.playTone(150, 0.12, 'sine', 0.1);
-    }
-
-    playHit() {
-        this.playTone(120, 0.08, 'square', 0.12);
-        setTimeout(() => this.playTone(80, 0.12, 'square', 0.1), 40);
-    }
-
-    playBossAttack() {
-        this.playTone(165, 0.12, 'sawtooth', 0.2);
-        setTimeout(() => this.playTone(130, 0.2, 'sawtooth', 0.18), 60);
-        setTimeout(() => this.playTone(90, 0.25, 'sawtooth', 0.15), 120);
-    }
-
-    playBossProjectile() {
-        this.playTone(440, 0.08, 'sine', 0.15);
-        setTimeout(() => this.playTone(330, 0.15, 'sine', 0.18), 40);
-        setTimeout(() => this.playTone(220, 0.2, 'triangle', 0.2), 80);
-    }
-
-    playSkill() {
         this.playTone(330, 0.3, 'sine', 0.3);
         setTimeout(() => this.playTone(440, 0.2, 'sine', 0.2), 100);
         setTimeout(() => this.playTone(550, 0.2, 'sine', 0.15), 200);

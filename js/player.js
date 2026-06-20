@@ -350,8 +350,10 @@ class Player {
         } else if (!this.isDashing) {
             // 站立 - 呼吸浮动
             this.mesh.position.y = CONFIG.player.height / 2 + Math.sin(Date.now() * 0.002) * 0.02;
-            this.mesh.rotation.x *= 0.9;
-            this.mesh.rotation.z *= 0.9;
+            this.mesh.rotation.x *= 0.8;
+            this.mesh.rotation.z *= 0.8;
+            if (Math.abs(this.mesh.rotation.x) < 0.005) this.mesh.rotation.x = 0;
+            if (Math.abs(this.mesh.rotation.z) < 0.005) this.mesh.rotation.z = 0;
         }
 
         // 武器动画 - 只在攻击冷却时才旋转，否则轻轻晃动
@@ -404,7 +406,7 @@ class Player {
             const eased = 1 - Math.pow(1 - progress, 2);
             this.position.x = startPos.x + dashDir.x * CONFIG.player.dashSpeed * CONFIG.player.dashDuration * eased;
             this.position.z = startPos.z + dashDir.z * CONFIG.player.dashSpeed * CONFIG.player.dashDuration * eased;
-            this.mesh.rotation.x = progress * Math.PI * 2;
+            this.mesh.rotation.x = progress * Math.PI;
 
             if (progress < 1) {
                 requestAnimationFrame(dashAnim);
@@ -507,11 +509,11 @@ class Player {
         this.mesh.position.y += 0.5;
         setTimeout(() => { this.mesh.position.y = CONFIG.player.height / 2; }, 200);
 
-        this.mesh.children.forEach(child => {
-            if (child.material && child.material.color) {
+        this.mesh.traverse(child => {
+            if (child.isMesh && child.material && child.material.color) {
                 const orig = child.material.color.clone();
                 child.material.color.set(0xff2222);
-                setTimeout(() => { child.material.color.copy(orig); }, 150);
+                setTimeout(() => { try { child.material.color.copy(orig); } catch(e) {} }, 150);
             }
         });
 
