@@ -500,6 +500,7 @@ class Player {
         if (buffType === 'tear') this.skillBuffCount = COMBAT.tearBuffCount;
         else if (buffType === 'charm') this.skillBuffCount = COMBAT.charmBuffCount;
         else if (buffType === 'ultimate') this.skillBuffCount = 999;
+        else if (buffType === 'mirror') this.skillBuffCount = 999; // 时间限制
     }
 
     attack() {

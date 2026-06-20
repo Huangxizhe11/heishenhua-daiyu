@@ -67,6 +67,13 @@ class Boss {
         this._mirrorClones = [];
         this.phaseDialogues = config.phaseDialogues || this.phaseDialogues;
         this.position.set(0, 1.0, -15);
+        this.removeLockPillars();
+        this.removeFireAltar();
+        this.removeSceneMirrorShards();
+        this.isWeakened = false;
+        this.weakenTimer = 0;
+        this._altarBurnTimer = 0;
+        this._altarRespawnTimer = 0;
         if (this.mesh) {
             this.scene.remove(this.mesh);
             this.mesh = null;
@@ -74,6 +81,9 @@ class Boss {
         this.createModel();
         this.mesh.position.copy(this.position);
         this.scene.add(this.mesh);
+        this.createLockPillars();
+        this.createFireAltar();
+        this.createSceneMirrorShards();
     }
 
     // ===== 模型分发 =====
@@ -282,6 +292,15 @@ class Boss {
         this.mesh = group;
         this.mesh.position.copy(this.position);
         this.scene.add(this.mesh);
+
+        // 金锁结界：场地四角金锁柱
+        this.lockPillars = [];
+        this.lockPillarPositions = [
+            new THREE.Vector3(12, 0, -12),
+            new THREE.Vector3(-12, 0, -12),
+            new THREE.Vector3(12, 0, -18),
+            new THREE.Vector3(-12, 0, -18),
+        ];
     }
 
     createBaochaiWeapon(c) {
@@ -539,6 +558,10 @@ class Boss {
         this.mesh = group;
         this.mesh.position.copy(this.position);
         this.scene.add(this.mesh);
+
+        // 妒火祭坛
+        this.fireAltar = null;
+        this.fireAltarTimer = 0;
     }
 
     createPaperDollMesh() {
@@ -721,6 +744,10 @@ class Boss {
         this.mesh = group;
         this.mesh.position.copy(this.position);
         this.scene.add(this.mesh);
+
+        // 风月宝鉴碎片（场景交互）
+        this.sceneMirrorShards = [];
+        this.mirrorShardTimer = 0;
     }
 
     createMirrorWeapon(c) {
@@ -742,6 +769,166 @@ class Boss {
         handle.position.y = -0.35;
         group.add(handle);
         return group;
+    }
+
+    // ===== 金锁结界 =====
+    createLockPillars() {
+        this.removeLockPillars();
+        if (this.bossType !== 'baochai') return;
+        const pillarMat = new THREE.MeshStandardMaterial({
+            color: 0xffd700, roughness: 0.15, metalness: 0.9,
+            emissive: 0xffd700, emissiveIntensity: 0.4
+        });
+        this.lockPillarPositions.forEach((pos, i) => {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 3, 8), pillarMat);
+            body.position.y = 1.5;
+            group.add(body);
+            const top = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), pillarMat);
+            top.position.y = 3.2;
+            group.add(top);
+            // 光柱连接效果
+            const beamGeo = new THREE.CylinderGeometry(0.02, 0.02, 20, 4);
+            const beamMat = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.15 });
+            const beam = new THREE.Mesh(beamGeo, beamMat);
+            beam.position.y = 10;
+            group.add(beam);
+            group.position.copy(pos);
+            group.userData = { hp: 200, maxHp: 200, alive: true, index: i };
+            this.scene.add(group);
+            this.lockPillars.push(group);
+        });
+    }
+
+    removeLockPillars() {
+        if (this.lockPillars) {
+            this.lockPillars.forEach(p => this.scene.remove(p));
+            this.lockPillars = [];
+        }
+    }
+
+    damageLockPillar(damage) {
+        if (!this.lockPillars || this.lockPillars.length === 0) return false;
+        // 找最近的活着的柱子
+        let closest = null;
+        let minDist = Infinity;
+        this.lockPillars.forEach(p => {
+            if (!p.userData.alive) return;
+            const d = p.position.distanceTo(this.position);
+            if (d < minDist) { minDist = d; closest = p; }
+        });
+        if (closest && minDist < 15) {
+            closest.userData.hp -= damage;
+            // 受击闪光
+            closest.children.forEach(c => {
+                if (c.material) { const o = c.material.color.clone(); c.material.color.set(0xffffff); setTimeout(() => c.material.color.copy(o), 80); }
+            });
+            if (closest.userData.hp <= 0) {
+                closest.userData.alive = false;
+                this.scene.remove(closest);
+                // 检查是否全部摧毁
+                const allDead = this.lockPillars.every(p => !p.userData.alive);
+                if (allDead) {
+                    this.lockPillars = [];
+                    // BOSS虚弱
+                    this.isWeakened = true;
+                    this.weakenTimer = 5;
+                    if (this.vfx) {
+                        this.vfx.createDamageNumber(this.position.clone().add(new THREE.Vector3(0, 3, 0)), '虚弱！', 'crit');
+                        this.vfx.createPhaseRing(this.position.clone(), 0xff4444);
+                    }
+                }
+                return true; // 柱子被摧毁
+            }
+        }
+        return false;
+    }
+
+    getLockPillarDamageReduction() {
+        if (!this.lockPillars) return 0;
+        const alive = this.lockPillars.filter(p => p.userData.alive).length;
+        return alive * 0.1; // 每根10%减伤
+    }
+
+    // ===== 妒火祭坛 =====
+    createFireAltar() {
+        this.removeFireAltar();
+        if (this.bossType !== 'zhaoyiniang') return;
+        const group = new THREE.Group();
+        // 祭坛底座
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.5, 0.5, 8), new THREE.MeshStandardMaterial({ color: 0x4a0000, roughness: 0.8, metalness: 0.2 }));
+        base.position.y = 0.25;
+        group.add(base);
+        // 祭坛火焰核心
+        const core = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.8 }));
+        core.position.y = 1.2;
+        group.add(core);
+        // 红色光环
+        const ringGeo = new THREE.TorusGeometry(1, 0.08, 8, 24);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xff2200, transparent: true, opacity: 0.5 });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.position.y = 0.8;
+        ring.rotation.x = Math.PI / 2;
+        group.add(ring);
+        // 随机位置生成
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 8 + Math.random() * 5;
+        group.position.set(Math.cos(angle) * dist, 0, -15 + Math.sin(angle) * dist);
+        group.userData = { hp: 999, alive: true, fireTimer: 0 };
+        this.scene.add(group);
+        this.fireAltar = group;
+    }
+
+    removeFireAltar() {
+        if (this.fireAltar) { this.scene.remove(this.fireAltar); this.fireAltar = null; }
+    }
+
+    explodeFireAltar() {
+        if (!this.fireAltar || !this.fireAltar.userData.alive) return;
+        this.fireAltar.userData.alive = false;
+        // 爆炸伤害
+        const dmg = 500;
+        this.takeDamage(dmg);
+        // 灼烧DOT
+        this._altarBurnTimer = 3;
+        this._altarBurnDmg = 50;
+        // 特效
+        if (this.vfx) {
+            this.vfx.createUltimateEffect(this.fireAltar.position.clone());
+            this.vfx.createDamageNumber(this.position.clone().add(new THREE.Vector3(0, 3, 0)), dmg, 'crit');
+            this.vfx.triggerScreenShake(0.5, 400);
+        }
+        this.scene.remove(this.fireAltar);
+        this.fireAltar = null;
+        // 15秒后重新生成
+        this._altarRespawnTimer = 15;
+    }
+
+    // ===== 风月宝鉴碎片 =====
+    createSceneMirrorShards() {
+        this.removeSceneMirrorShards();
+        if (this.bossType !== 'mirror') return;
+        const shardMat = new THREE.MeshStandardMaterial({
+            color: 0xbb77ff, roughness: 0.02, metalness: 1.0,
+            emissive: 0x9932cc, emissiveIntensity: 0.3,
+            transparent: true, opacity: 0.7
+        });
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const dist = 5 + Math.random() * 8;
+            const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.4, 0), shardMat.clone());
+            shard.position.set(Math.cos(angle) * dist, 0.3, -15 + Math.sin(angle) * dist);
+            shard.userData = { buffDuration: 3, type: 'small' };
+            this.scene.add(shard);
+            this.sceneMirrorShards.push(shard);
+        }
+    }
+
+    removeSceneMirrorShards() {
+        if (this.sceneMirrorShards) {
+            this.sceneMirrorShards.forEach(s => this.scene.remove(s));
+            this.sceneMirrorShards = [];
+        }
     }
 
     // ===== 通用方法 =====
@@ -779,6 +966,25 @@ class Boss {
         if (this.hp <= 0) return null;
 
         this._animTime += delta;
+        // 虚弱状态计时
+        if (this.isWeakened) {
+            this.weakenTimer -= delta;
+            if (this.weakenTimer <= 0) this.isWeakened = false;
+        }
+        // 灼烧DOT
+        if (this._altarBurnTimer > 0) {
+            this._altarBurnTimer -= delta;
+            this._altarBurnTick = (this._altarBurnTick || 0) - delta;
+            if (this._altarBurnTick <= 0) {
+                this._altarBurnTick = 1; // 每秒扣一次
+                this.takeDamage(this._altarBurnDmg || 50);
+            }
+        }
+        // 祭坛重新生成
+        if (this._altarRespawnTimer > 0) {
+            this._altarRespawnTimer -= delta;
+            if (this._altarRespawnTimer <= 0) this.createFireAltar();
+        }
         if (!this.isStunned) {
             const baseY = this.bossType === 'mirror' ? 1.5 : 1.0;
             this.position.y = baseY + Math.sin(this._animTime * 1.5) * 0.25;
@@ -1771,7 +1977,13 @@ class Boss {
     takeDamage(damage) {
         if (this.hp <= 0) return false;
         const resistedDamage = damage * (1 - this.damageResistance) * this.weaknessMultiplier;
-        this.hp -= resistedDamage;
+        let actualDmg = resistedDamage;
+        // 虚弱状态：1.5倍伤害
+        if (this.isWeakened) actualDmg *= 1.5;
+        // 金锁柱减伤
+        const reduction = this.getLockPillarDamageReduction ? this.getLockPillarDamageReduction() : 0;
+        if (reduction > 0) actualDmg *= (1 - reduction);
+        this.hp -= actualDmg;
 
         if (Math.random() < 0.2 && !this.isCharging && !this.isStunned) {
             const jumpDir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.mesh.quaternion);

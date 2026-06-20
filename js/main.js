@@ -205,6 +205,7 @@ class Game {
     startGame() {
         document.getElementById('start-screen').style.display = 'none';
         this.currentLevel = 0;
+        this.pointerLockFailed = false;  // 重置pointer lock状态
         audio.init();
         try { audio.playBGM('prologue'); } catch(e) {}
         try {
@@ -293,6 +294,7 @@ class Game {
         this.boss.setVFX(this.vfx);
         this.boss.onPhaseChange = (phase) => {
             this.showPhaseText(level.boss.phaseNames[phase]);
+            this.onBossPhaseChange(phase, level);
         };
 
         // 重新配置场景（不同关卡不同环境）
@@ -481,10 +483,43 @@ class Game {
 
         this.checkProjectileHits();
         this.checkFireTrailDamage(delta);
+        // 赵姨娘祭坛火球
+        if (this.boss.bossType === 'zhaoyiniang' && this.boss.fireAltar && this.boss.fireAltar.userData.alive) {
+            this.boss.fireAltar.userData.fireTimer -= delta;
+            if (this.boss.fireAltar.userData.fireTimer <= 0) {
+                this.boss.fireAltar.userData.fireTimer = 5;
+                // 向玩家方向发射火球
+                const dir = new THREE.Vector3().subVectors(this.player.position, this.boss.fireAltar.position).normalize();
+                if (this.vfx) this.vfx.createProjectile(this.boss.fireAltar.position.clone().add(new THREE.Vector3(0, 1.2, 0)), dir, 0xff4400, 80, { speed: 10, life: 3 });
+            }
+            // 玩家靠近引爆
+            if (this.player.position.distanceTo(this.boss.fireAltar.position) < 3) {
+                this.boss.explodeFireAltar();
+            }
+        }
         this.updateCamera(delta);
         this.updateHUD();
         this.updateSkillCooldowns();
         this.updateComboStageUI();
+
+        // 镜中魔镜面碎片交互
+        if (this.boss.bossType === 'mirror' && this.boss.sceneMirrorShards) {
+            this.boss.sceneMirrorShards.forEach(s => {
+                if (!s.userData.alive && s.userData.alive !== undefined) return;
+                const dist = s.position.distanceTo(this.player.position);
+                if (dist < 2) {
+                    // 踩到碎片：获得镜像buff（攻击范围+50%，3秒）
+                    this.player.applySkillBuff('mirror');
+                    s.userData.alive = false;
+                    this.scene.remove(s);
+                    this.vfx.createDamageNumber(
+                        this.player.position.clone().add(new THREE.Vector3(0, 3, 0)),
+                        '镜像强化！', 'crit'
+                    );
+                    this.vfx.createPhaseRing(this.player.position.clone(), 0x9932cc);
+                }
+            });
+        }
 
         if (this.player.mp < CONFIG.player.maxMp) {
             this.player.mp += 8 * delta;
@@ -547,8 +582,15 @@ class Game {
             charge.position = chargePos;
             const dir = this.player.getDirection();
             charge.direction = dir;
-            this.vfx.createChargeReleaseEffect(chargePos, dir, charge.chargeRatio);
-            this.vfx.triggerScreenShake(0.2 + charge.chargeRatio * 0.3, 200 + charge.chargeRatio * 200);
+            if (charge.type === 'charge') {
+                // 蓄力攻击
+                this.vfx.createChargeReleaseEffect(chargePos, dir, charge.chargeRatio);
+                this.vfx.triggerScreenShake(0.2 + charge.chargeRatio * 0.3, 200 + charge.chargeRatio * 200);
+            } else {
+                // 短按 = 连招攻击
+                this.vfx.createComboEffect(chargePos, dir, charge.stage || 0);
+                this.vfx.triggerScreenShake(0.1 + (charge.stage || 0) * 0.05, 100);
+            }
             this.checkPlayerHit(charge);
         }
     }
@@ -632,10 +674,49 @@ class Game {
                 );
             }
 
-            // 天魁星后范围扩大
+            // 天魁星后范围扩大 / 镜像buff范围扩大
             let actualRange = attack.range;
             if (this.player.skillBuff === 'ultimate') {
                 actualRange *= COMBAT.ultimateBuffRangeMultiplier;
+            }
+            if (this.player.skillBuff === 'mirror') {
+                actualRange *= 1.5;
+            }
+
+            // 攻击金锁柱
+            if (this.boss.bossType === 'baochai' && this.boss.lockPillars && this.boss.lockPillars.length > 0) {
+                this.boss.lockPillars.forEach(p => {
+                    if (!p.userData.alive) return;
+                    const dist = p.position.distanceTo(this.player.position);
+                    if (dist < 5) {
+                        p.userData.hp -= actualDamage;
+                        // 受击反馈
+                        p.children.forEach(c => {
+                            if (c.material && c.material.color) {
+                                const orig = c.material.color.clone();
+                                c.material.color.set(0xffffff);
+                                setTimeout(() => c.material.color.copy(orig), 80);
+                            }
+                        });
+                        this.vfx.createDamageNumber(
+                            p.position.clone().add(new THREE.Vector3(0, 3.5, 0)),
+                            actualDamage, 'normal'
+                        );
+                        if (p.userData.hp <= 0) {
+                            p.userData.alive = false;
+                            this.scene.remove(p);
+                            this.vfx.createPhaseRing(p.position.clone(), 0xffd700);
+                            const allDead = this.boss.lockPillars.every(pp => !pp.userData.alive);
+                            if (allDead) {
+                                this.boss.lockPillars = [];
+                                this.boss.isWeakened = true;
+                                this.boss.weakenTimer = 5;
+                                this.vfx.createDamageNumber(this.boss.position.clone().add(new THREE.Vector3(0, 3, 0)), '虚弱！', 'crit');
+                                this.vfx.createPhaseRing(this.boss.position.clone(), 0xff4444);
+                            }
+                        }
+                    }
+                });
             }
 
             const killed = this.boss.takeDamage(actualDamage);
@@ -943,6 +1024,24 @@ class Game {
         if (this.boss.hp > 0) {
             document.getElementById('boss-hp-fill').style.width = (this.boss.hp / this.boss.maxHp * 100) + '%';
             document.getElementById('boss-hp-text').textContent = Math.round(this.boss.hp) + ' / ' + this.boss.maxHp;
+            // BOSS阶段名称和血条颜色
+            const phaseEl = document.getElementById('boss-phase-name');
+            if (phaseEl) {
+                const level = LEVELS[this.currentLevel];
+                const phaseNames = level.boss.phaseNames || ['', '', ''];
+                phaseEl.textContent = phaseNames[this.boss.phase] || '';
+                phaseEl.style.color = ['#ffb6c1', '#ff8800', '#ff2200'][this.boss.phase] || '#ffb6c1';
+            }
+            // 血条颜色随阶段变化
+            const hpFill = document.getElementById('boss-hp-fill');
+            if (hpFill) {
+                const phaseColors = ['#e94560', '#ff8800', '#ff2200'];
+                hpFill.style.background = phaseColors[this.boss.phase] || '#e94560';
+            }
+        } else {
+            // BOSS死亡时清空阶段名称
+            const phaseEl = document.getElementById('boss-phase-name');
+            if (phaseEl) phaseEl.textContent = '';
         }
     }
 
@@ -1013,9 +1112,9 @@ class Game {
         // 技能强化
         if (this.player.skillBuff) {
             buffEl.style.display = 'block';
-            const names = { tear: '泪雨强化', ultimate: '天魁星强化', charm: '颦颦一笑强化' };
+            const names = { tear: '泪雨强化', ultimate: '天魁星强化', charm: '颦颦一笑强化', mirror: '镜像强化' };
             buffEl.textContent = names[this.player.skillBuff] + ' x' + this.player.skillBuffCount;
-            buffEl.style.color = { tear: '#87ceeb', ultimate: '#ffd700', charm: '#ffb6c1' }[this.player.skillBuff];
+            buffEl.style.color = { tear: '#87ceeb', ultimate: '#ffd700', charm: '#ffb6c1', mirror: '#bb77ff' }[this.player.skillBuff];
         } else {
             buffEl.style.display = 'none';
         }
@@ -1113,6 +1212,7 @@ class Game {
         audio.stopBGM();
         this.isPaused = false;
         this.gameState = 'menu';
+        this.pointerLockFailed = false;  // 重置pointer lock状态
         if (document.pointerLockElement) document.exitPointerLock();
 
         // 隐藏所有游戏界面
