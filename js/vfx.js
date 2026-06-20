@@ -8,6 +8,7 @@ class VFXManager {
         this.shakeIntensity = 0;
         this.shakeDuration = 0;
         this.shakeTimer = 0;
+        this.playerPosition = null; // 供追踪弹使用，由main每帧更新
     }
 
     triggerScreenShake(intensity, duration) {
@@ -184,7 +185,7 @@ class VFXManager {
         }
     }
 
-    createProjectile(position, direction, color, damage) {
+    createProjectile(position, direction, color, damage, options) {
         const group = new THREE.Group();
         const coreGeo = new THREE.SphereGeometry(0.2, 8, 8);
         const coreMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9 });
@@ -201,10 +202,300 @@ class VFXManager {
 
         this.projectiles.push({
             mesh: group,
-            velocity: direction.clone().multiplyScalar(12),
-            life: 3,
-            damage: damage || 80
+            velocity: direction.clone().multiplyScalar(options && options.speed ? options.speed : 12),
+            life: options && options.life ? options.life : 3,
+            damage: damage || 80,
+            homing: options && options.homing ? options.homing : false,
+            homingStrength: options && options.homingStrength ? options.homingStrength : 8,
+            color: color
         });
+    }
+
+    // ===== 薛宝钗：冷香寒气（冰蓝色直线寒气弹）=====
+    createColdBreath(position, direction, damage) {
+        const group = new THREE.Group();
+        // 冰晶核心
+        const coreGeo = new THREE.OctahedronGeometry(0.25, 0);
+        const coreMat = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.9 });
+        const core = new THREE.Mesh(coreGeo, coreMat);
+        group.add(core);
+        // 冰雾光晕
+        const glowGeo = new THREE.SphereGeometry(0.5, 8, 8);
+        const glowMat = new THREE.MeshBasicMaterial({ color: 0x66bbff, transparent: true, opacity: 0.35 });
+        group.add(new THREE.Mesh(glowGeo, glowMat));
+        // 冰晶碎片环绕
+        for (let i = 0; i < 4; i++) {
+            const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.08, 0), new THREE.MeshBasicMaterial({ color: 0xaaeeff, transparent: true, opacity: 0.8 }));
+            shard.position.set(Math.cos(i) * 0.3, Math.sin(i) * 0.3, 0);
+            shard._orbit = i;
+            group.add(shard);
+        }
+        group.position.copy(position);
+        this.scene.add(group);
+
+        const proj = {
+            mesh: group,
+            velocity: direction.clone().multiplyScalar(14),
+            life: 2.5,
+            damage: damage,
+            homing: false,
+            color: 0x88ccff,
+            slow: true,
+            isCold: true
+        };
+        this.projectiles.push(proj);
+    }
+
+    // ===== 薛宝钗：牡丹绽放（金色AOE）=====
+    createPeonyBloom(position, range) {
+        // 金色扩散环
+        for (let r = 0; r < 3; r++) {
+            const ringGeo = new THREE.TorusGeometry(0.5, 0.12, 8, 24);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.8 - r * 0.2 });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.position.copy(position);
+            ring.position.y = 0.5;
+            ring.rotation.x = Math.PI / 2;
+            this.scene.add(ring);
+            const delay = r * 120;
+            const maxScale = range / 0.5;
+            setTimeout(() => {
+                let s = 1;
+                const expand = () => {
+                    s *= 1.08;
+                    ring.scale.set(s, s, s);
+                    ring.material.opacity -= 0.02;
+                    if (s < maxScale && ring.material.opacity > 0) requestAnimationFrame(expand);
+                    else this.scene.remove(ring);
+                };
+                expand();
+            }, delay);
+        }
+        // 牡丹花瓣粒子
+        for (let i = 0; i < 30; i++) {
+            const angle = (i / 30) * Math.PI * 2;
+            const r = range * 0.6;
+            const petal = this.createPetal(position.clone().add(new THREE.Vector3(Math.cos(angle) * r, 0.5, Math.sin(angle) * r)), 0xffd700);
+            petal.velocity = new THREE.Vector3(Math.cos(angle) * 6, 3 + Math.random() * 3, Math.sin(angle) * 6);
+            petal.life = 1.2;
+            this.particles.push(petal);
+        }
+        // 金色光柱
+        for (let i = 0; i < 15; i++) {
+            const p = this.createParticle(position.clone().add(new THREE.Vector3((Math.random() - 0.5) * range, 0, (Math.random() - 0.5) * range)), 0xffd700, 0.4);
+            p.velocity = new THREE.Vector3(0, 5 + Math.random() * 3, 0);
+            p.life = 1;
+            this.particles.push(p);
+        }
+    }
+
+    // ===== 赵姨娘：纸人诅咒（追踪纸人弹）=====
+    createPaperDollProjectile(position, damage) {
+        const doll = new THREE.Group();
+        const paperMat = new THREE.MeshBasicMaterial({ color: 0xeeeeee, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+        doll.add(new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.6), paperMat));
+        const arm = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.1), paperMat);
+        arm.position.y = 0.1;
+        doll.add(arm);
+        // 红色符文眼（魇魔印记）
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide });
+        const eyeL = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.05), eyeMat);
+        eyeL.position.set(-0.06, 0.18, 0.01);
+        doll.add(eyeL);
+        const eyeR = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.05), eyeMat);
+        eyeR.position.set(0.06, 0.18, 0.01);
+        doll.add(eyeR);
+
+        doll.position.copy(position);
+        this.scene.add(doll);
+
+        this.projectiles.push({
+            mesh: doll,
+            velocity: new THREE.Vector3(0, 0, 0),
+            life: 6,
+            damage: damage,
+            homing: true,
+            homingStrength: 5,
+            speed: 7,
+            color: 0xff0000,
+            isPaperDoll: true,
+            _spin: 0
+        });
+    }
+
+    // ===== 赵姨娘：妒火吐息（前方扇形持续火焰粒子）=====
+    createFireBreath(position, direction, range) {
+        const halfAngle = Math.PI / 6;
+        for (let i = 0; i < 60; i++) {
+            const spread = (Math.random() - 0.5) * halfAngle * 2;
+            const dist = Math.random() * range;
+            const dir = direction.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), spread);
+            const colors = [0xff4400, 0xff8800, 0xffaa00, 0xcc2200];
+            const p = this.createParticle(
+                position.clone().add(dir.clone().multiplyScalar(dist * 0.5)),
+                colors[Math.floor(Math.random() * colors.length)],
+                0.35
+            );
+            p.velocity = dir.clone().multiplyScalar(6 + Math.random() * 4);
+            p.velocity.y += Math.random() * 2;
+            p.life = 0.8;
+            p.decay = 1.5;
+            this.particles.push(p);
+        }
+        // 火焰核心光球
+        const coreGeo = new THREE.SphereGeometry(0.6, 8, 8);
+        const coreMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.6 });
+        const core = new THREE.Mesh(coreGeo, coreMat);
+        core.position.copy(position);
+        this.scene.add(core);
+        this.particles.push({ mesh: core, velocity: new THREE.Vector3(), life: 0.5, decay: 3 });
+    }
+
+    // ===== 赵姨娘：魇魔诅咒弹（暗紫追踪）=====
+    createCurseProjectile(position, direction, damage) {
+        const group = new THREE.Group();
+        const coreGeo = new THREE.SphereGeometry(0.18, 8, 8);
+        const coreMat = new THREE.MeshBasicMaterial({ color: 0x9933cc, transparent: true, opacity: 0.95 });
+        group.add(new THREE.Mesh(coreGeo, coreMat));
+        const glowGeo = new THREE.SphereGeometry(0.4, 8, 8);
+        const glowMat = new THREE.MeshBasicMaterial({ color: 0x660099, transparent: true, opacity: 0.4 });
+        group.add(new THREE.Mesh(glowGeo, glowMat));
+        group.position.copy(position);
+        this.scene.add(group);
+
+        this.projectiles.push({
+            mesh: group,
+            velocity: direction.clone().multiplyScalar(10),
+            life: 4,
+            damage: damage,
+            homing: true,
+            homingStrength: 3,
+            color: 0x9933cc,
+            isCurse: true
+        });
+    }
+
+    // ===== 镜中魔：镜面折射弹幕（多方向镜片）=====
+    createMirrorBarrage(position, count, damage, color) {
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
+            const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+            const group = new THREE.Group();
+            // 镜片
+            const shardGeo = new THREE.OctahedronGeometry(0.22, 0);
+            const shardMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9 });
+            group.add(new THREE.Mesh(shardGeo, shardMat));
+            // 光晕
+            const glowMat = new THREE.MeshBasicMaterial({ color: 0xddaaff, transparent: true, opacity: 0.3 });
+            group.add(new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), glowMat));
+            group.position.copy(position);
+            this.scene.add(group);
+
+            this.projectiles.push({
+                mesh: group,
+                velocity: dir.multiplyScalar(9),
+                life: 3,
+                damage: damage,
+                homing: false,
+                color: color,
+                isMirror: true,
+                _spin: angle
+            });
+        }
+    }
+
+    // ===== 镜中魔：幻境碎裂（镜片爆裂特效）=====
+    createMirrorShatter(position, color) {
+        for (let i = 0; i < 40; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const elev = (Math.random() - 0.3) * Math.PI;
+            const speed = 8 + Math.random() * 8;
+            const shardGeo = new THREE.OctahedronGeometry(0.1 + Math.random() * 0.15, 0);
+            const shardMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9 });
+            const shard = new THREE.Mesh(shardGeo, shardMat);
+            shard.position.copy(position);
+            shard.position.y += 1;
+            this.scene.add(shard);
+            this.particles.push({
+                mesh: shard,
+                velocity: new THREE.Vector3(Math.cos(angle) * Math.cos(elev) * speed, Math.sin(elev) * speed, Math.sin(angle) * Math.cos(elev) * speed),
+                life: 1.2,
+                decay: 1.2,
+                rotationSpeed: (Math.random() - 0.5) * 10
+            });
+        }
+        // 中心闪光环
+        const ringGeo = new THREE.TorusGeometry(0.5, 0.2, 8, 24);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xddaaff, transparent: true, opacity: 0.8 });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.position.copy(position);
+        ring.position.y += 1;
+        ring.rotation.x = Math.PI / 2;
+        this.scene.add(ring);
+        const expand = () => {
+            ring.scale.multiplyScalar(1.1);
+            ring.material.opacity -= 0.04;
+            if (ring.material.opacity > 0) requestAnimationFrame(expand);
+            else this.scene.remove(ring);
+        };
+        expand();
+    }
+
+    // ===== 赵姨娘被动：火焰拖尾（移动留下火焰地面伤害区）=====
+    createFireTrail(position, damage) {
+        // 小火焰粒子
+        const colors = [0xff4400, 0xff8800, 0xffaa00];
+        for (let i = 0; i < 6; i++) {
+            const p = this.createParticle(
+                position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.8, 0.1, (Math.random() - 0.5) * 0.8)),
+                colors[Math.floor(Math.random() * colors.length)],
+                0.25
+            );
+            p.velocity = new THREE.Vector3((Math.random() - 0.5) * 1, 1 + Math.random() * 2, (Math.random() - 0.5) * 1);
+            p.life = 0.6;
+            p.decay = 2;
+            this.particles.push(p);
+        }
+        // 地面火焰伤害区（持续1秒）
+        const fireGeo = new THREE.CircleGeometry(0.6, 12);
+        const fireMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+        const fire = new THREE.Mesh(fireGeo, fireMat);
+        fire.position.set(position.x, 0.12, position.z);
+        fire.rotation.x = -Math.PI / 2;
+        this.scene.add(fire);
+        // 作为特殊 decal，带伤害判定
+        this.decals.push({ mesh: fire, life: 1, decay: 1, isFire: true, damage: damage, _tickTimer: 0 });
+    }
+
+    // ===== 镜中魔被动：幻影分身（短暂存在，迷惑玩家）=====
+    createMirrorClone(position, color, duration) {
+        const clone = new THREE.Group();
+        // 半透明镜面碎片身躯
+        const shardMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+        for (let i = 0; i < 5; i++) {
+            const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.3 - i * 0.04, 0), shardMat);
+            shard.position.set((Math.random() - 0.5) * 0.4, 0.5 + i * 0.35, (Math.random() - 0.5) * 0.4);
+            clone.add(shard);
+        }
+        // 镜面头
+        const head = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), shardMat);
+        head.position.y = 2.3;
+        clone.add(head);
+        clone.position.copy(position);
+        this.scene.add(clone);
+
+        // 分身存在期间自转+上浮+淡出
+        const startTime = Date.now();
+        const dur = duration * 1000;
+        const animate = () => {
+            const t = (Date.now() - startTime) / dur;
+            if (t >= 1 || !clone.parent) { this.scene.remove(clone); return; }
+            clone.rotation.y += 0.03;
+            clone.position.y = position.y + t * 0.5;
+            clone.children.forEach(c => { if (c.material) c.material.opacity = 0.4 * (1 - t); });
+            requestAnimationFrame(animate);
+        };
+        animate();
     }
 
     createParticle(position, color, size) {
@@ -382,28 +673,87 @@ class VFXManager {
             const proj = this.projectiles[i];
             proj.life -= delta;
             if (proj.life <= 0) { this.scene.remove(proj.mesh); this.projectiles.splice(i, 1); continue; }
+
+            // 追踪弹逻辑
+            if (proj.homing && this.playerPosition && proj.mesh.position.distanceTo(this.playerPosition) > 1) {
+                const toPlayer = new THREE.Vector3().subVectors(this.playerPosition, proj.mesh.position);
+                toPlayer.y = 0;
+                if (toPlayer.lengthSq() > 0.01) {
+                    toPlayer.normalize();
+                    const speed = proj.speed || 12;
+                    const desired = toPlayer.multiplyScalar(speed);
+                    // 平滑转向
+                    proj.velocity.x += (desired.x - proj.velocity.x) * Math.min(1, delta * proj.homingStrength);
+                    proj.velocity.z += (desired.z - proj.velocity.z) * Math.min(1, delta * proj.homingStrength);
+                }
+            }
+
             proj.mesh.position.add(proj.velocity.clone().multiplyScalar(delta));
+
+            // 纸人旋转飘动
+            if (proj.isPaperDoll) {
+                proj.mesh.rotation.y += delta * 4;
+                proj.mesh.position.y += Math.sin(Date.now() * 0.006) * 0.02;
+            }
+            // 镜片自转
+            if (proj.isMirror) {
+                proj.mesh.children.forEach(c => { c.rotation.x += delta * 5; c.rotation.y += delta * 4; });
+            }
+            // 冷香弹碎片环绕
+            if (proj.isCold) {
+                proj.mesh.children.forEach((c, idx) => {
+                    if (idx >= 2) {
+                        c.position.x = Math.cos(Date.now() * 0.005 + idx) * 0.3;
+                        c.position.y = Math.sin(Date.now() * 0.005 + idx) * 0.3;
+                    }
+                });
+            }
         }
 
         for (let i = this.decals.length - 1; i >= 0; i--) {
             const d = this.decals[i];
             d.life -= delta * d.decay;
             if (d.life <= 0) { this.scene.remove(d.mesh); this.decals.splice(i, 1); continue; }
-            d.mesh.material.opacity = d.life * 0.3;
+            // 火焰区闪烁，普通decal渐隐
+            if (d.isFire) {
+                d.mesh.material.opacity = 0.3 + Math.sin(Date.now() * 0.02) * 0.2;
+            } else {
+                d.mesh.material.opacity = d.life * 0.3;
+            }
         }
+    }
+
+    // 检测火焰地面伤害区对玩家的持续伤害
+    checkFireTrailDamage(position, radius) {
+        let totalDmg = 0;
+        for (let i = this.decals.length - 1; i >= 0; i--) {
+            const d = this.decals[i];
+            if (!d.isFire) continue;
+            const dx = d.mesh.position.x - position.x;
+            const dz = d.mesh.position.z - position.z;
+            if (Math.sqrt(dx * dx + dz * dz) < radius + 0.6) {
+                // 每0.5秒判定一次伤害（由调用方控制频率）
+                totalDmg += d.damage * 0.3;
+            }
+        }
+        return totalDmg;
     }
 
     checkProjectileCollision(position, radius) {
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             const proj = this.projectiles[i];
             if (proj.mesh.position.distanceTo(position) < radius) {
-                const dmg = proj.damage;
+                const result = {
+                    damage: proj.damage,
+                    slow: proj.isCold ? 1.8 : 0,    // 冷香寒气：减速
+                    root: 0
+                };
                 this.scene.remove(proj.mesh);
                 this.projectiles.splice(i, 1);
-                return dmg;
+                return result;
             }
         }
-        return 0;
+        return { damage: 0, slow: 0, root: 0 };
     }
 
     clear() {

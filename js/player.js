@@ -5,12 +5,15 @@ class Player {
         this.hp = CONFIG.player.maxHp;
         this.mp = CONFIG.player.maxMp;
         this.position = new THREE.Vector3(0, CONFIG.player.height / 2, 8);
+        this.velocity = new THREE.Vector3(0, 0, 0);
         this.isDashing = false;
         this.isInvincible = false;
         this.canDash = true;
         this.cooldowns = { attack: 0, skill: 0, ultimate: 0, charm: 0 };
         this.combo = 0;
         this.comboTimer = 0;
+        this.slowTimer = 0;   // 减速状态（冷香寒气）
+        this.rootTimer = 0;   // 禁锢状态（牡丹绽放）
         this.createModel();
     }
 
@@ -270,47 +273,115 @@ class Player {
             if (this.cooldowns[key] > 0) this.cooldowns[key] -= delta;
         });
 
+        // 状态效果计时
+        if (this.slowTimer > 0) this.slowTimer -= delta;
+        if (this.rootTimer > 0) this.rootTimer -= delta;
+
         if (this.combo > 0) {
             this.comboTimer -= delta;
             if (this.comboTimer <= 0) this.combo = 0;
         }
 
+        // 相机方向向量
         const forward = new THREE.Vector3(-Math.sin(cameraAngle), 0, -Math.cos(cameraAngle));
         const right = new THREE.Vector3(Math.cos(cameraAngle), 0, -Math.sin(cameraAngle));
-        const moveDir = new THREE.Vector3();
 
-        if (keys['w'] || keys['arrowup']) moveDir.add(forward);
-        if (keys['s'] || keys['arrowdown']) moveDir.sub(forward);
-        if (keys['a'] || keys['arrowleft']) moveDir.sub(right);
-        if (keys['d'] || keys['arrowright']) moveDir.add(right);
+        // 输入方向
+        const inputDir = new THREE.Vector3();
+        if (keys['w'] || keys['arrowup']) inputDir.add(forward);
+        if (keys['s'] || keys['arrowdown']) inputDir.sub(forward);
+        if (keys['a'] || keys['arrowleft']) inputDir.sub(right);
+        if (keys['d'] || keys['arrowright']) inputDir.add(right);
 
-        if (moveDir.lengthSq() > 0 && !this.isDashing) {
-            moveDir.normalize();
-            this.position.x += moveDir.x * CONFIG.player.moveSpeed * delta;
-            this.position.z += moveDir.z * CONFIG.player.moveSpeed * delta;
-            // 走路摆动
-            this.mesh.position.y = CONFIG.player.height / 2 + Math.sin(Date.now() * 0.01) * 0.05;
+        // 禁锢状态：无法移动
+        const isRooted = this.rootTimer > 0;
+        // 减速状态：移速减半
+        const speedMul = this.slowTimer > 0 ? 0.45 : 1;
+
+        if (this.isDashing) {
+            // 翻滚中不处理移动
+        } else if (isRooted) {
+            // 禁锢：速度归零
+            this.velocity.x *= 0.5;
+            this.velocity.z *= 0.5;
+        } else if (inputDir.lengthSq() > 0) {
+            // 有输入 → 加速
+            inputDir.normalize();
+            const targetSpeed = CONFIG.player.moveSpeed * speedMul;
+            this.velocity.x += (inputDir.x * targetSpeed - this.velocity.x) * Math.min(1, delta * 12);
+            this.velocity.z += (inputDir.z * targetSpeed - this.velocity.z) * Math.min(1, delta * 12);
         } else {
-            // 站立呼吸
-            this.mesh.position.y = CONFIG.player.height / 2 + Math.sin(Date.now() * 0.002) * 0.03;
+            // 无输入 → 减速（摩擦力）
+            this.velocity.x *= Math.max(0, 1 - delta * 10);
+            this.velocity.z *= Math.max(0, 1 - delta * 10);
+            if (Math.abs(this.velocity.x) < 0.1) this.velocity.x = 0;
+            if (Math.abs(this.velocity.z) < 0.1) this.velocity.z = 0;
         }
 
+        // 应用速度
+        this.position.x += this.velocity.x * delta;
+        this.position.z += this.velocity.z * delta;
+
+        // 边界限制
         const limit = CONFIG.world.size * 0.45;
         this.position.x = Math.max(-limit, Math.min(limit, this.position.x));
         this.position.z = Math.max(-limit, Math.min(limit, this.position.z));
 
+        // 翻滚
         if (keys[' '] && this.canDash && !this.isDashing) {
-            this.dash(moveDir.length() > 0 ? moveDir.normalize() : forward.clone());
+            const dashDir = inputDir.lengthSq() > 0 ? inputDir.normalize() : forward.clone();
+            this.dash(dashDir);
         }
 
+        // 位置更新
         this.mesh.position.x = this.position.x;
         this.mesh.position.z = this.position.z;
 
-        if (this.weapon) {
-            this.weapon.rotation.z += delta * 2;
+        // 移动动画
+        const speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
+        if (speed > 0.5 && !this.isDashing) {
+            // 走路 - 身体前倾 + 上下摆动
+            const walkCycle = Date.now() * 0.008;
+            this.mesh.position.y = CONFIG.player.height / 2 + Math.abs(Math.sin(walkCycle)) * 0.06;
+            // 身体微微前倾
+            const tiltAmount = Math.min(speed / CONFIG.player.moveSpeed, 1) * 0.08;
+            this.mesh.rotation.x = -tiltAmount * Math.cos(cameraAngle);
+            this.mesh.rotation.z = Math.sin(walkCycle) * 0.03;
+        } else if (!this.isDashing) {
+            // 站立 - 呼吸浮动
+            this.mesh.position.y = CONFIG.player.height / 2 + Math.sin(Date.now() * 0.002) * 0.02;
+            this.mesh.rotation.x *= 0.9;
+            this.mesh.rotation.z *= 0.9;
         }
 
-        return moveDir;
+        // 武器动画 - 只在攻击冷却时才旋转，否则轻轻晃动
+        if (this.weapon) {
+            if (this.cooldowns.attack < 0.1 && this.cooldowns.skill < 0.1) {
+                // 站立/走路时武器轻微晃动
+                this.weapon.rotation.z = Math.sin(Date.now() * 0.003) * 0.1;
+            }
+        }
+
+        return inputDir;
+    }
+
+    setInvincibleVisual(on) {
+        if (!this.mesh) return;
+        this.mesh.traverse(child => {
+            if (child.isMesh && child.material && child.material.emissive) {
+                try {
+                    if (on) {
+                        child.material._oe = child.material.emissive.getHex();
+                        child.material._oei = child.material.emissiveIntensity;
+                        child.material.emissive.setHex(0xffffff);
+                        child.material.emissiveIntensity = 0.8;
+                    } else {
+                        child.material.emissive.setHex(child.material._oe || 0);
+                        child.material.emissiveIntensity = child.material._oei || 0;
+                    }
+                } catch(e) {}
+            }
+        });
     }
 
     dash(direction) {
@@ -320,69 +391,36 @@ class Player {
         this.canDash = false;
         this.mp -= 20;
 
+        this.setInvincibleVisual(true);
         const dashDir = direction.clone().normalize();
         const startPos = this.position.clone();
         const startTime = Date.now();
+        const dashDur = CONFIG.player.dashDuration * 1000;
 
         audio.playDash();
 
-        let lastGhostTime = 0;
-        const ghostInterval = 50;
-
         const dashAnim = () => {
-            const progress = Math.min(1, (Date.now() - startTime) / (CONFIG.player.dashDuration * 1000));
-            this.position.x = startPos.x + dashDir.x * CONFIG.player.dashSpeed * CONFIG.player.dashDuration * progress;
-            this.position.z = startPos.z + dashDir.z * CONFIG.player.dashSpeed * CONFIG.player.dashDuration * progress;
+            const progress = Math.min(1, (Date.now() - startTime) / dashDur);
+            const eased = 1 - Math.pow(1 - progress, 2);
+            this.position.x = startPos.x + dashDir.x * CONFIG.player.dashSpeed * CONFIG.player.dashDuration * eased;
+            this.position.z = startPos.z + dashDir.z * CONFIG.player.dashSpeed * CONFIG.player.dashDuration * eased;
             this.mesh.rotation.x = progress * Math.PI * 2;
-
-            const now = Date.now();
-            if (now - lastGhostTime > ghostInterval && progress < 1) {
-                lastGhostTime = now;
-                this.spawnGhost(progress);
-            }
 
             if (progress < 1) {
                 requestAnimationFrame(dashAnim);
             } else {
                 this.isDashing = false;
                 this.mesh.rotation.x = 0;
-                setTimeout(() => { this.isInvincible = false; }, CONFIG.player.invincibleDuration * 1000);
+                this.velocity.x = dashDir.x * CONFIG.player.moveSpeed * 0.5;
+                this.velocity.z = dashDir.z * CONFIG.player.moveSpeed * 0.5;
+                setTimeout(() => {
+                    this.isInvincible = false;
+                    this.setInvincibleVisual(false);
+                }, CONFIG.player.invincibleDuration * 1000);
                 setTimeout(() => { this.canDash = true; }, CONFIG.player.dashCooldown * 1000);
             }
         };
         dashAnim();
-    }
-
-    spawnGhost(progress) {
-        const ghost = this.mesh.clone();
-        ghost.position.copy(this.mesh.position);
-        ghost.rotation.copy(this.mesh.rotation);
-        ghost.traverse(child => {
-            if (child.isMesh) {
-                child.material = child.material.clone();
-                child.material.transparent = true;
-                child.material.opacity = 0.35 * (1 - progress);
-                child.material.depthWrite = false;
-            }
-        });
-        this.scene.add(ghost);
-
-        const fadeStart = Date.now();
-        const fadeDuration = 400;
-        const fadeOut = () => {
-            const t = Math.min(1, (Date.now() - fadeStart) / fadeDuration);
-            ghost.traverse(child => {
-                if (child.isMesh && child.material) {
-                    child.material.opacity = 0.35 * (1 - progress) * (1 - t);
-                }
-            });
-            if (t < 1) {
-                requestAnimationFrame(fadeOut);
-            } else {
-                this.scene.remove(ghost);
-            }
-        };
-        fadeOut();
     }
 
     attack() {
@@ -502,8 +540,18 @@ class Player {
         this.isDashing = false;
         this.canDash = true;
         this.isInvincible = false;
+        this.slowTimer = 0;
+        this.rootTimer = 0;
     }
 
     heal(amount) { this.hp = Math.min(CONFIG.player.maxHp, this.hp + amount); }
     restoreMp(amount) { this.mp = Math.min(CONFIG.player.maxMp, this.mp + amount); }
+
+    // 减速（冷香寒气）
+    applySlow(duration) { this.slowTimer = Math.max(this.slowTimer, duration); }
+    // 禁锢（牡丹绽放）
+    applyRoot(duration) { this.rootTimer = Math.max(this.rootTimer, duration); }
+
+    isSlowed() { return this.slowTimer > 0; }
+    isRooted() { return this.rootTimer > 0; }
 }

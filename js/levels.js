@@ -14,6 +14,7 @@ const LEVELS = [
         subtitle: '第一回',
         boss: {
             name: '薛宝钗',
+            type: 'baochai',
             displayName: '薛 宝 钗',
             maxHp: 5000,
             attackDamage: 120,
@@ -24,12 +25,18 @@ const LEVELS = [
             skirtColor: 0xdaa520,
             weaponColor: 0xffd700,
             auraColor: 0xffd700,
+            // 原著意象：金锁(护身)·冷香丸(寒气)·牡丹(艳冠群芳)·冷美人(防御反击)
+            coldBreathDmg: 90,        // 冷香寒气：直线冰冻弹，命中减速
+            coldBreathRange: 18,
+            peonyBloomDmg: 130,       // 牡丹绽放：自身周围AOE + 短暂禁锢
+            peonyBloomRange: 5,
+            reflectChance: 0.25,      // 金锁护体：概率弹反玩家普攻（阶段2+）
             phases: [
                 { hpThreshold: 1.0, pattern: 'normal' },
                 { hpThreshold: 0.6, pattern: 'enraged' },
                 { hpThreshold: 0.3, pattern: 'desperate' }
             ],
-            phaseNames: ['第一回合 · 正常', '第二回合 · 暴怒', '第三回合 · 绝境'],
+            phaseNames: ['冷香初绽 · 金锁护体', '牡丹怒放 · 冷酷无情', '金锁将碎 · 玉石俱焚'],
             phaseDialogues: ['金锁有灵，岂容你放肆！', '既然执迷不悟，便让你见识宝钗之怒！', '玉石俱焚，也在所不惜！'],
             projectileBaseDmg: 80,
         },
@@ -70,6 +77,7 @@ const LEVELS = [
         subtitle: '第二回',
         boss: {
             name: '赵姨娘',
+            type: 'zhaoyiniang',
             displayName: '赵 姨 娘',
             maxHp: 7000,
             attackDamage: 150,
@@ -80,12 +88,18 @@ const LEVELS = [
             skirtColor: 0xcc3300,
             weaponColor: 0xff6600,
             auraColor: 0xff4400,
+            // 原著意象：魇魔法(与马道婆用纸人纸鬼诅咒宝玉凤姐)·嫉妒之火·暗算·庶出怨毒
+            paperDollDmg: 110,        // 纸人诅咒：召唤追踪纸人，接触爆炸
+            paperDollCount: 1,        // 同时召唤纸人数（阶段2增加）
+            fireBreathDmg: 60,        // 妒火吐息：前方扇形持续火焰（多段）
+            fireBreathRange: 7,
+            curseDmg: 100,            // 魇魔诅咒弹：暗紫追踪弹
             phases: [
                 { hpThreshold: 1.0, pattern: 'normal' },
                 { hpThreshold: 0.5, pattern: 'enraged' },
                 { hpThreshold: 0.2, pattern: 'desperate' }
             ],
-            phaseNames: ['妒火初燃', '烈焰焚心', '灰飞烟灭'],
+            phaseNames: ['妒火初燃 · 魇魔初现', '烈焰焚心 · 纸人漫天', '灰飞烟灭 · 同归于尽'],
             phaseDialogues: ['你们都该死！', '嫉妒之火，焚尽一切！', '同归于尽吧！'],
             projectileBaseDmg: 100,
         },
@@ -126,6 +140,7 @@ const LEVELS = [
         subtitle: '终回',
         boss: {
             name: '镜中魔',
+            type: 'mirror',
             displayName: '镜 中 魔',
             maxHp: 10000,
             attackDamage: 180,
@@ -136,12 +151,18 @@ const LEVELS = [
             skirtColor: 0x6a0dad,
             weaponColor: 0xbb77ff,
             auraColor: 0x9932cc,
+            // 原著意象：风月宝鉴(正反两面镜)·太虚幻境·镜像分身·碎裂颠倒
+            mirrorBarrageDmg: 70,     // 镜面折射弹幕：多方向镜片
+            mirrorBarrageCount: 8,    // 弹幕数量（阶段3增加）
+            teleportDmg: 220,         // 空间瞬移突袭：瞬移到玩家身后斩击
+            shatterDmg: 260,          // 幻境碎裂：大范围镜片爆裂（阶段3终极）
+            shatterRange: 9,
             phases: [
                 { hpThreshold: 1.0, pattern: 'normal' },
                 { hpThreshold: 0.5, pattern: 'enraged' },
                 { hpThreshold: 0.25, pattern: 'desperate' }
             ],
-            phaseNames: ['镜花水月', '幻境崩塌', '心魔显形'],
+            phaseNames: ['镜花水月 · 幻境初显', '幻境崩塌 · 镜像分身', '心魔显形 · 万镜碎裂'],
             phaseDialogues: ['你看清自己了吗？', '幻境破碎，无处可逃！', '你最恐惧的，就是你自己！'],
             projectileBaseDmg: 120,
         },

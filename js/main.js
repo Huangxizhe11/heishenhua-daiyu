@@ -19,6 +19,8 @@ class Game {
         this.lootItems = [];
         this._lastLoot = null;
         this.isPaused = false;
+        this.pointerLockFailed = false;  // 指针锁不可用（嵌入WebView等）→ 降级到拖拽模式
+        this._dragging = false;          // 拖拽旋转视角
 
         this.init();
     }
@@ -53,8 +55,50 @@ class Game {
         this.animate();
     }
 
+    // 统一的指针锁请求：捕获异常，失败时标记降级
+    lockPointer() {
+        if (this.pointerLockFailed) return;
+        try {
+            const el = this.renderer.domElement;
+            const p = el.requestPointerLock();
+            if (p && typeof p.then === 'function') {
+                p.catch(() => {
+                    this.pointerLockFailed = true;
+                    console.warn('Pointer lock 不可用，已降级为鼠标拖拽模式');
+                    const hint = document.getElementById('lock-hint');
+                    const dragHint = document.getElementById('drag-hint');
+                    if (hint) hint.style.display = 'none';
+                    if (dragHint && this.gameState === 'playing') dragHint.style.display = 'block';
+                });
+            }
+        } catch (e) {
+            this.pointerLockFailed = true;
+        }
+    }
+
     bindEvents() {
         document.getElementById('start-btn').addEventListener('click', () => this.startGame());
+        document.getElementById('level-select-btn').addEventListener('click', () => {
+            document.getElementById('level-select-screen').style.display = 'flex';
+        });
+        document.getElementById('level-select-back').addEventListener('click', () => {
+            document.getElementById('level-select-screen').style.display = 'none';
+        });
+        document.querySelectorAll('.level-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const level = parseInt(btn.dataset.level);
+                document.getElementById('level-select-screen').style.display = 'none';
+                document.getElementById('start-screen').style.display = 'none';
+                this.currentLevel = level;
+                audio.init();
+                const levelData = LEVELS[level];
+                audio.playBGM('prologue');
+                this.showStoryScreen(levelData.story.intro, () => {
+                    audio.playBGM('level' + (level + 1));
+                    this.beginLevel();
+                });
+            });
+        });
         document.getElementById('controls-btn').addEventListener('click', () => {
             document.getElementById('controls-screen').style.display = 'flex';
         });
@@ -71,6 +115,8 @@ class Game {
             if (this._storyCallback) {
                 const cb = this._storyCallback;
                 this._storyCallback = null;
+                // 先隐藏故事画面，避免 z-index:2000 盖住后续界面（胜利/结局/关卡）
+                document.getElementById('story-screen').style.display = 'none';
                 cb();
             }
         });
@@ -78,6 +124,9 @@ class Game {
         document.getElementById('victory-screen').addEventListener('click', () => this.nextLevel());
         document.getElementById('ending-screen').addEventListener('click', () => this.restart());
         document.getElementById('pause-resume').addEventListener('click', () => this.resume());
+        document.getElementById('pause-menu').addEventListener('click', () => this.backToMenu());
+        document.getElementById('gameover-menu').addEventListener('click', () => this.backToMenu());
+        document.getElementById('victory-menu').addEventListener('click', () => this.backToMenu());
 
         document.addEventListener('keydown', (e) => {
             this.keys[e.key.toLowerCase()] = true;
@@ -98,24 +147,35 @@ class Game {
         });
 
         document.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement === document.body) {
+            // 指针锁模式
+            if (document.pointerLockElement === this.renderer.domElement) {
                 this.cameraAngle -= e.movementX * 0.003;
                 this.cameraHeight = Math.max(2, Math.min(15, this.cameraHeight + e.movementY * 0.02));
+            } else if (this._dragging && this.pointerLockFailed) {
+                // 降级：鼠标按住拖拽旋转视角
+                this.cameraAngle -= e.movementX * 0.005;
+                this.cameraHeight = Math.max(2, Math.min(15, this.cameraHeight + e.movementY * 0.03));
             }
         });
 
         document.addEventListener('mousedown', (e) => {
             if (this.gameState !== 'playing') return;
-            if (document.pointerLockElement !== document.body) {
-                document.body.requestPointerLock();
+            // 指针锁可用时：首次点击锁定，之后攻击
+            if (!this.pointerLockFailed && document.pointerLockElement !== this.renderer.domElement) {
+                this.lockPointer();
                 return;
+            }
+            // 指针锁失败降级：左键拖拽旋转+松开攻击；右键直接放技能
+            if (this.pointerLockFailed) {
+                if (e.button === 0) { this._dragging = true; this.mouse.left = true; this.playerAttack(); return; }
+                if (e.button === 2) { this.mouse.right = true; this.playerUseSkill(); return; }
             }
             if (e.button === 0) { this.mouse.left = true; this.playerAttack(); }
             if (e.button === 2) { this.mouse.right = true; this.playerUseSkill(); }
         });
 
         document.addEventListener('mouseup', (e) => {
-            if (e.button === 0) this.mouse.left = false;
+            if (e.button === 0) { this.mouse.left = false; this._dragging = false; }
             if (e.button === 2) this.mouse.right = false;
         });
 
@@ -125,7 +185,17 @@ class Game {
             if (this.isPaused) return;
             const hint = document.getElementById('lock-hint');
             if (this.gameState === 'playing') {
-                hint.style.display = document.pointerLockElement ? 'none' : 'block';
+                if (!document.pointerLockElement) {
+                    // 指针锁不可用且已标记失败 → 不弹提示不暂停，降级运行
+                    if (this.pointerLockFailed) {
+                        hint.style.display = 'none';
+                    } else {
+                        hint.style.display = 'block';
+                        this.pause();
+                    }
+                } else {
+                    hint.style.display = 'none';
+                }
             }
         });
 
@@ -203,12 +273,19 @@ class Game {
         document.getElementById('skills-bar').style.display = 'flex';
         document.getElementById('poem').style.display = 'block';
         document.getElementById('crosshair').style.display = 'block';
-        document.getElementById('lock-hint').style.display = 'block';
+        // 降级模式显示拖拽提示，否则显示锁定提示
+        if (this.pointerLockFailed) {
+            document.getElementById('lock-hint').style.display = 'none';
+            document.getElementById('drag-hint').style.display = 'block';
+        } else {
+            document.getElementById('lock-hint').style.display = 'block';
+            document.getElementById('drag-hint').style.display = 'none';
+        }
 
         audio.init();
         const bgmThemes = ['level1', 'level2', 'level3'];
         audio.playBGM(bgmThemes[this.currentLevel] || 'level1');
-        document.body.requestPointerLock();
+        this.lockPointer();
 
         this.gameState = 'playing';
         this.lastTime = Date.now();
@@ -269,11 +346,12 @@ class Game {
         this.player.update(delta, this.keys, this.cameraAngle);
 
         // 角色面朝远离相机方向（十字准星方向）
-        if (!document.pointerLockElement) {
+        // 指针锁激活 或 降级拖拽模式 → 按相机方向；否则朝向BOSS
+        if (document.pointerLockElement || this.pointerLockFailed) {
+            this.player.mesh.rotation.y = this.cameraAngle + Math.PI;
+        } else {
             const toBoss = this.player.getDirectionTo(this.boss.position);
             this.player.mesh.rotation.y = Math.atan2(-toBoss.x, -toBoss.z);
-        } else {
-            this.player.mesh.rotation.y = this.cameraAngle + Math.PI;
         }
 
         if (this.boss.hp > 0) {
@@ -283,8 +361,10 @@ class Game {
 
         this.world.update(delta);
         this.vfx.update(delta);
+        this.vfx.playerPosition = this.player.position;
 
         this.checkProjectileHits();
+        this.checkFireTrailDamage(delta);
         this.updateCamera(delta);
         this.updateHUD();
         this.updateSkillCooldowns();
@@ -308,7 +388,7 @@ class Game {
             Math.cos(this.cameraAngle) * this.cameraDistance
         );
         const camPos = target.clone().add(offset);
-        this.camera.position.lerp(camPos, 0.08);
+        this.camera.position.lerp(camPos, 0.12);
         this.camera.lookAt(target);
 
         const shake = this.vfx.getShakeOffset();
@@ -376,11 +456,45 @@ class Game {
         if (this.boss.hp <= 0) return;
         const dist = this.player.position.distanceTo(this.boss.position);
         if (dist <= attack.range) {
-            const killed = this.boss.takeDamage(attack.damage);
+            // 薛宝钗金锁护体：阶段1+概率弹反普攻
+            const cfg = this.boss.config;
+            const canReflect = this.boss.bossType === 'baochai' && this.boss.phase >= 1
+                && attack.type === 'normal' && cfg.reflectChance
+                && Math.random() < cfg.reflectChance;
+
+            if (canReflect) {
+                // 弹反：BOSS仅受30%伤害，反弹50%伤害给玩家
+                this.boss.takeDamage(attack.damage * 0.3);
+                this.vfx.createDamageNumber(
+                    this.boss.position.clone().add(new THREE.Vector3(0, 3, 0)),
+                    '弹反!', 'crit'
+                );
+                const reflectDmg = attack.damage * 0.5;
+                this.player.takeDamage(reflectDmg);
+                this.vfx.createDamageNumber(
+                    this.player.position.clone().add(new THREE.Vector3(0, 2.5, 0)),
+                    reflectDmg, 'boss'
+                );
+                this.vfx.triggerScreenShake(0.3, 200);
+                this.vfx.createPhaseRing(this.boss.position.clone(), 0xffd700);
+                return;
+            }
+
+            // 薛宝钗金锁盾正面减伤：正面受击伤害减半
+            let actualDamage = attack.damage;
+            if (this.boss.bossType === 'baochai' && this.boss.isBlockingFront(this.player.position)) {
+                actualDamage = attack.damage * 0.5;
+                this.vfx.createDamageNumber(
+                    this.boss.position.clone().add(new THREE.Vector3(0, 3, 0)),
+                    '格挡!', 'crit'
+                );
+            }
+
+            const killed = this.boss.takeDamage(actualDamage);
             this.vfx.createDamageDecal(this.boss.position);
             this.vfx.createDamageNumber(
                 this.boss.position.clone().add(new THREE.Vector3(0, 2.5, 0)),
-                attack.damage, attack.type === 'ultimate' ? 'crit' : 'normal'
+                actualDamage, attack.type === 'ultimate' ? 'crit' : 'normal'
             );
             this.vfx.triggerScreenShake(attack.type === 'ultimate' ? 0.3 : 0.1, attack.type === 'ultimate' ? 250 : 100);
 
@@ -415,19 +529,91 @@ class Game {
                 attack.damage, 'boss'
             );
             this.vfx.triggerScreenShake(0.4, 300);
+        } else if (attack.type === 'teleport') {
+            // 镜中魔瞬移突袭
+            const dist = this.player.position.distanceTo(this.boss.position);
+            if (dist <= attack.range + 1) {
+                this.player.takeDamage(attack.damage);
+                this.vfx.createDamageNumber(
+                    this.player.position.clone().add(new THREE.Vector3(0, 2.5, 0)),
+                    attack.damage, 'crit'
+                );
+                this.vfx.triggerScreenShake(0.5, 350);
+            }
+        } else if (attack.type === 'aoe') {
+            // 牡丹绽放 / 幻境碎裂
+            const dist = this.player.position.distanceTo(this.boss.position);
+            if (dist <= attack.range) {
+                this.player.takeDamage(attack.damage);
+                this.vfx.createDamageNumber(
+                    this.player.position.clone().add(new THREE.Vector3(0, 2.5, 0)),
+                    attack.damage, 'crit'
+                );
+                this.vfx.triggerScreenShake(0.4, 300);
+                // 牡丹绽放附带禁锢
+                if (attack.root && attack.subtype === 'peony') {
+                    this.player.applyRoot(attack.root);
+                    this.vfx.createDamageNumber(
+                        this.player.position.clone().add(new THREE.Vector3(0, 3, 0)),
+                        '禁锢!', 'boss'
+                    );
+                }
+            }
+        } else if (attack.type === 'cone') {
+            // 妒火吐息：前方扇形
+            const toPlayer = new THREE.Vector3().subVectors(this.player.position, attack.position);
+            toPlayer.y = 0;
+            const dist = toPlayer.length();
+            if (dist <= attack.range) {
+                toPlayer.normalize();
+                const dot = toPlayer.dot(attack.direction);
+                if (dot > Math.cos(attack.angle)) {
+                    this.player.takeDamage(attack.damage);
+                    this.vfx.createDamageNumber(
+                        this.player.position.clone().add(new THREE.Vector3(0, 2.5, 0)),
+                        attack.damage, 'boss'
+                    );
+                    this.vfx.triggerScreenShake(0.25, 200);
+                }
+            }
         }
     }
 
     checkProjectileHits() {
         if (this.boss.hp <= 0 || this.player.hp <= 0) return;
-        const dmg = this.vfx.checkProjectileCollision(this.player.position, 1.5);
+        const hit = this.vfx.checkProjectileCollision(this.player.position, 1.5);
+        if (hit.damage > 0) {
+            this.player.takeDamage(hit.damage);
+            this.vfx.createDamageNumber(
+                this.player.position.clone().add(new THREE.Vector3(0, 2.5, 0)),
+                hit.damage, 'boss'
+            );
+            this.vfx.triggerScreenShake(0.15, 120);
+        }
+        // 冷香寒气命中减速
+        if (hit.slow > 0) {
+            this.player.applySlow(hit.slow);
+            this.vfx.createDamageNumber(
+                this.player.position.clone().add(new THREE.Vector3(0, 3, 0)),
+                '减速!', 'boss'
+            );
+        }
+    }
+
+    // 赵姨娘火焰地面持续伤害
+    checkFireTrailDamage(delta) {
+        if (this.boss.hp <= 0 || this.player.hp <= 0) return;
+        if (this.boss.bossType !== 'zhaoyiniang') return;
+        this._fireTickTimer = (this._fireTickTimer || 0) - delta;
+        if (this._fireTickTimer > 0) return;
+        this._fireTickTimer = 0.5;
+        const dmg = this.vfx.checkFireTrailDamage(this.player.position, 1.2);
         if (dmg > 0) {
             this.player.takeDamage(dmg);
             this.vfx.createDamageNumber(
                 this.player.position.clone().add(new THREE.Vector3(0, 2.5, 0)),
-                dmg, 'boss'
+                Math.round(dmg), 'boss'
             );
-            this.vfx.triggerScreenShake(0.15, 120);
         }
     }
 
@@ -443,6 +629,7 @@ class Game {
         document.getElementById('level-text').style.display = 'none';
         document.getElementById('poem').style.display = 'none';
         document.getElementById('lock-hint').style.display = 'none';
+        document.getElementById('drag-hint').style.display = 'none';
         this.clearLoot();
 
         const level = LEVELS[this.currentLevel];
@@ -485,30 +672,35 @@ class Game {
             return;
         }
 
-        const level = LEVELS[this.currentLevel];
-        this.boss.reconfigure(level.boss);
-        this.boss.setVFX(this.vfx);
-        this.boss.onPhaseChange = (phase) => {
-            this.showPhaseText(level.boss.phaseNames[phase]);
-        };
+        try {
+            const level = LEVELS[this.currentLevel];
+            this.boss.reconfigure(level.boss);
+            this.boss.setVFX(this.vfx);
+            this.boss.onPhaseChange = (phase) => {
+                this.showPhaseText(level.boss.phaseNames[phase]);
+            };
 
-        this.world.clear();
-        this.world.init(level.world);
+            this.world.clear();
+            this.world.init(level.world);
 
-        this.vfx.clear();
-        this.clearLoot();
+            this.vfx.clear();
+            this.clearLoot();
 
-        this.player.respawn();
-        this.bossDefeated = false;
-        this.cameraAngle = 0;
+            this.player.respawn();
+            this.bossDefeated = false;
+            this.cameraAngle = 0;
 
-        this.scene.fog = new THREE.Fog(level.world.fogColor, CONFIG.world.fogNear, CONFIG.world.fogFar);
+            this.scene.fog = new THREE.Fog(level.world.fogColor, CONFIG.world.fogNear, CONFIG.world.fogFar);
 
-        audio.playBGM('prologue');
-        this.showStoryScreen(level.story.intro, () => {
-            audio.playBGM('level' + (this.currentLevel + 1));
-            this.beginLevel();
-        });
+            audio.playBGM('prologue');
+            this.showStoryScreen(level.story.intro, () => {
+                audio.playBGM('level' + (this.currentLevel + 1));
+                this.beginLevel();
+            });
+        } catch(e) {
+            console.error('nextLevel error:', e);
+            this.restartFull();
+        }
     }
 
     gameOver() {
@@ -524,6 +716,7 @@ class Game {
         document.getElementById('level-text').style.display = 'none';
         document.getElementById('poem').style.display = 'none';
         document.getElementById('lock-hint').style.display = 'none';
+        document.getElementById('drag-hint').style.display = 'none';
         document.getElementById('game-over').style.display = 'flex';
     }
 
@@ -539,7 +732,7 @@ class Game {
         this.isPaused = false;
         this.lastTime = Date.now();
         document.getElementById('pause-screen').style.display = 'none';
-        document.body.requestPointerLock();
+        this.lockPointer();
     }
 
     updateHUD() {
@@ -696,6 +889,27 @@ class Game {
         document.getElementById('victory-screen').style.display = 'none';
         document.getElementById('ending-screen').style.display = 'none';
         this.restartFull();
+    }
+
+    backToMenu() {
+        audio.stopBGM();
+        this.isPaused = false;
+        this.gameState = 'menu';
+        if (document.pointerLockElement) document.exitPointerLock();
+
+        // 隐藏所有游戏界面
+        ['hud','boss-hud','skills-bar','controls','crosshair','level-text','poem',
+         'lock-hint','drag-hint','game-over','victory-screen','ending-screen','pause-screen'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+
+        // 清理场景
+        this.vfx.clear();
+        this.clearLoot();
+
+        // 显示主界面
+        document.getElementById('start-screen').style.display = 'flex';
     }
 
     restartFull() {

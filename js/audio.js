@@ -182,6 +182,34 @@ class AudioManager {
         setTimeout(() => this.playTone(100, 0.3, 'sawtooth', 0.2), 150);
     }
 
+    // 薛宝钗·冷香寒气：冰冷高频扫频
+    playColdBreath() {
+        this.playTone(1200, 0.3, 'sine', 0.18);
+        setTimeout(() => this.playTone(900, 0.25, 'sine', 0.15), 100);
+        setTimeout(() => this.playTone(1500, 0.2, 'triangle', 0.12), 200);
+    }
+
+    // 薛宝钗·牡丹绽放：金色钟铃
+    playPeonyBloom() {
+        this.playTone(659, 0.4, 'sine', 0.25);
+        setTimeout(() => this.playTone(880, 0.35, 'sine', 0.2), 120);
+        setTimeout(() => this.playTone(1175, 0.5, 'sine', 0.15), 240);
+    }
+
+    // 赵姨娘·利爪：尖锐短促
+    playClawAttack() {
+        this.playTone(800, 0.06, 'square', 0.2);
+        setTimeout(() => this.playTone(600, 0.08, 'sawtooth', 0.18), 40);
+        setTimeout(() => this.playTone(400, 0.1, 'sawtooth', 0.15), 80);
+    }
+
+    // 赵姨娘·纸人召唤：诡异颤音
+    playPaperSummon() {
+        this.playTone(330, 0.15, 'triangle', 0.2);
+        setTimeout(() => this.playTone(370, 0.15, 'triangle', 0.18), 80);
+        setTimeout(() => this.playTone(290, 0.2, 'triangle', 0.16), 160);
+    }
+
     playMirrorShatter() {
         this.playTone(2000, 0.1, 'sine', 0.2);
         setTimeout(() => this.playTone(1500, 0.15, 'sine', 0.25), 50);

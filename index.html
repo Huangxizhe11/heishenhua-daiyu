@@ -61,6 +61,18 @@
         }
         .credits-content b { color: #e94560; font-size: 1.2rem; }
 
+        .level-list { display: flex; flex-direction: column; gap: 12px; min-width: 350px; }
+        .level-btn {
+            display: flex; flex-direction: column; align-items: center;
+            padding: 15px 20px; background: rgba(255,255,255,0.03);
+            border: 1px solid #444; border-radius: 10px; cursor: pointer;
+            transition: all 0.3s; color: #ccc; text-align: center;
+        }
+        .level-btn:hover { border-color: #e94560; background: rgba(233,69,96,0.1); }
+        .level-num { color: #e94560; font-size: 0.8rem; letter-spacing: 3px; }
+        .level-name { font-size: 1.2rem; color: #fff; margin: 5px 0; }
+        .level-boss { color: #888; font-size: 0.8rem; }
+
         #hud {
             position: fixed; top: 20px; left: 20px; color: #fff;
             z-index: 100; pointer-events: none; display: none;
@@ -217,6 +229,12 @@
         .restart-hint {
             margin-top: 30px; color: #777; font-size: 0.9rem; animation: pulse 2s infinite; cursor: pointer;
         }
+        .back-menu-btn {
+            margin-top: 15px; padding: 10px 35px; color: #888; background: transparent;
+            border: 1px solid #555; border-radius: 20px; cursor: pointer; font-size: 0.9rem;
+            transition: all 0.3s; letter-spacing: 3px;
+        }
+        .back-menu-btn:hover { color: #fff; border-color: #e94560; }
         #victory-level { color: #888; font-size: 0.85rem; margin-bottom: 5px; }
         #victory-boss-name { color: #4ecdc4; font-size: 1.1rem; margin-bottom: 15px; }
 
@@ -329,9 +347,32 @@
         <div class="subtitle">潇湘妃子，降世除魔</div>
         <div class="menu-buttons">
             <button id="start-btn" class="menu-btn">开始游戏</button>
+            <button id="level-select-btn" class="menu-btn">关卡选择</button>
             <button id="controls-btn" class="menu-btn">操作说明</button>
             <button id="credits-btn" class="menu-btn">制作信息</button>
         </div>
+    </div>
+
+    <div id="level-select-screen" class="overlay-screen" style="display:none;">
+        <h2>关卡选择</h2>
+        <div class="level-list">
+            <button class="level-btn" data-level="0">
+                <span class="level-num">第一回</span>
+                <span class="level-name">金锁迷障</span>
+                <span class="level-boss">BOSS: 薛宝钗</span>
+            </button>
+            <button class="level-btn" data-level="1">
+                <span class="level-num">第二回</span>
+                <span class="level-name">妒火炼狱</span>
+                <span class="level-boss">BOSS: 赵姨娘</span>
+            </button>
+            <button class="level-btn" data-level="2">
+                <span class="level-num">终回</span>
+                <span class="level-name">太虚幻境</span>
+                <span class="level-boss">BOSS: 镜中魔</span>
+            </button>
+        </div>
+        <button id="level-select-back" class="menu-btn" style="margin-top:25px;">返 回</button>
     </div>
 
     <div id="controls-screen" class="overlay-screen" style="display:none;">
@@ -369,7 +410,7 @@
         <button id="story-continue">继 续</button>
     </div>
 
-    <div id="hud">
+    <div id="hud" aria-hidden="true">
         <div class="hud-label">生命</div>
         <div class="hud-bar"><div class="hud-fill" id="hp-fill"></div></div>
         <div id="hp-text"></div>
@@ -378,7 +419,7 @@
         <div id="mp-text"></div>
     </div>
 
-    <div id="boss-hud">
+    <div id="boss-hud" aria-hidden="true">
         <div id="boss-name"></div>
         <div id="boss-hp-bar"><div id="boss-hp-fill"></div></div>
         <div id="boss-hp-text"></div>
@@ -407,28 +448,31 @@
         E - 颦颦一笑
     </div>
 
-    <div id="combo"></div>
-    <div id="poem">花谢花飞花满天，<br>红消香断有谁怜？</div>
-    <div id="level-text"></div>
-    <div id="damage-numbers"></div>
-    <div id="low-hp-overlay"></div>
-    <div id="hp-heartbeat-ring"></div>
-    <div id="crosshair"></div>
-    <div id="boss-intro"></div>
-    <div id="phase-text"></div>
-    <div id="loot-toast"><div class="toast-title">掉落物</div><div id="toast-items"></div></div>
-    <div class="lock-hint" id="lock-hint">🖱️ 点击屏幕锁定鼠标<br>锁定后即可攻击和旋转视角<br>按 ESC 释放鼠标</div>
+    <div id="combo" aria-hidden="true"></div>
+    <div id="poem" aria-hidden="true">花谢花飞花满天，<br>红消香断有谁怜？</div>
+    <div id="level-text" aria-hidden="true"></div>
+    <div id="damage-numbers" aria-hidden="true"></div>
+    <div id="low-hp-overlay" aria-hidden="true"></div>
+    <div id="hp-heartbeat-ring" aria-hidden="true"></div>
+    <div id="crosshair" aria-hidden="true"></div>
+    <div id="boss-intro" aria-hidden="true"></div>
+    <div id="phase-text" aria-hidden="true"></div>
+    <div id="loot-toast" aria-hidden="true"><div class="toast-title">掉落物</div><div id="toast-items"></div></div>
+    <div class="lock-hint" id="lock-hint" aria-hidden="true">🖱️ 点击屏幕锁定鼠标<br>锁定后即可攻击和旋转视角<br>按 ESC 释放鼠标</div>
+    <div class="lock-hint" id="drag-hint" style="display:none;" aria-hidden="true">🖱️ 左键攻击 · 按住左键拖拽旋转视角<br>右键释放技能</div>
 
     <div id="game-over">
         <h1>魂归离恨天</h1>
         <p>林黛玉已陨落</p>
         <div class="restart-hint">点击重新开始</div>
+        <button class="back-menu-btn" id="gameover-menu">返回主界面</button>
     </div>
 
     <div id="pause-screen">
         <h1>暂 停</h1>
         <p>ESC 继续游戏</p>
         <button id="pause-resume" style="margin-top:25px;padding:10px 40px;color:#fff;background:transparent;border:1px solid #666;border-radius:20px;cursor:pointer;font-size:1rem;transition:all 0.3s;letter-spacing:3px;">继 续</button>
+        <button class="back-menu-btn" id="pause-menu">返回主界面</button>
     </div>
 
     <div id="victory-screen">
@@ -437,6 +481,7 @@
         <div id="victory-boss-name"></div>
         <div id="loot-list"></div>
         <div class="restart-hint">点击进入下一关</div>
+        <button class="back-menu-btn" id="victory-menu">返回主界面</button>
     </div>
 
     <div id="ending-screen">
