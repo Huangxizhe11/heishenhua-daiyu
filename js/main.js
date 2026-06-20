@@ -100,7 +100,7 @@ class Game {
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === document.body) {
                 this.cameraAngle -= e.movementX * 0.003;
-                this.cameraHeight = Math.max(2, Math.min(15, this.cameraHeight - e.movementY * 0.02));
+                this.cameraHeight = Math.max(2, Math.min(15, this.cameraHeight + e.movementY * 0.02));
             }
         });
 

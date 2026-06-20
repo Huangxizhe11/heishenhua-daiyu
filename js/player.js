@@ -281,8 +281,8 @@ class Player {
 
         if (keys['w'] || keys['arrowup']) moveDir.add(forward);
         if (keys['s'] || keys['arrowdown']) moveDir.sub(forward);
-        if (keys['a'] || keys['arrowleft']) moveDir.add(right);
-        if (keys['d'] || keys['arrowright']) moveDir.sub(right);
+        if (keys['a'] || keys['arrowleft']) moveDir.sub(right);
+        if (keys['d'] || keys['arrowright']) moveDir.add(right);
 
         if (moveDir.lengthSq() > 0 && !this.isDashing) {
             moveDir.normalize();
