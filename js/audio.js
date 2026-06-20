@@ -45,68 +45,33 @@ class AudioManager {
         } catch(e) {}
     }
 
-    // ===== BGM 系统 =====
+    // ===== BGM 系统 (真实MP3) =====
     stopBGM() {
-        this.bgmNodes.forEach(n => {
-            try { n.stop(); } catch(e) {}
-        });
-        this.bgmNodes = [];
+        if (this.currentBGM) {
+            this.currentBGM.pause();
+            this.currentBGM.currentTime = 0;
+            this.currentBGM = null;
+        }
         this.bgmPlaying = false;
     }
 
     playBGM(theme) {
         this.stopBGM();
-        if (!this.ensureContext()) return;
-        this.bgmPlaying = true;
-        const now = this.ctx.currentTime;
-
-        const themes = {
-            prologue: { notes: [261, 329, 392, 329, 261, 220, 261, 329], tempo: 0.8, type: 'sine', vol: 0.12 },
-            level1:   { notes: [220, 261, 329, 261, 220, 196, 220, 261, 329, 392, 329, 261], tempo: 0.5, type: 'triangle', vol: 0.1 },
-            level2:   { notes: [196, 233, 293, 233, 196, 174, 196, 233, 293, 349, 293, 233], tempo: 0.35, type: 'sawtooth', vol: 0.08 },
-            level3:   { notes: [277, 329, 415, 329, 277, 233, 277, 329, 415, 466, 415, 329], tempo: 0.6, type: 'sine', vol: 0.1 },
-            ending:   { notes: [261, 329, 392, 523, 392, 329, 261, 329, 392, 523, 659, 523, 392, 329, 261], tempo: 0.7, type: 'sine', vol: 0.12 },
+        const tracks = {
+            prologue: 'bgm/prologue.mp3',
+            level1: 'bgm/level1.mp3',
+            level2: 'bgm/level2.mp3',
+            level3: 'bgm/level3.mp3',
+            ending: 'bgm/ending.mp3',
         };
-
-        const t = themes[theme] || themes.level1;
-        const loopLen = t.notes.length * t.tempo;
-
-        const playLoop = () => {
-            if (!this.bgmPlaying) return;
-            t.notes.forEach((freq, i) => {
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-                osc.frequency.value = freq;
-                osc.type = t.type;
-                const start = this.ctx.currentTime + i * t.tempo;
-                gain.gain.setValueAtTime(0, start);
-                gain.gain.linearRampToValueAtTime(t.vol, start + 0.05);
-                gain.gain.setValueAtTime(t.vol, start + t.tempo * 0.7);
-                gain.gain.linearRampToValueAtTime(0, start + t.tempo * 0.95);
-                osc.start(start);
-                osc.stop(start + t.tempo);
-                this.bgmNodes.push(osc);
-            });
-
-            // Pad / drone layer
-            const padFreq = t.notes[0] * 0.5;
-            const padOsc = this.ctx.createOscillator();
-            const padGain = this.ctx.createGain();
-            padOsc.connect(padGain);
-            padGain.connect(this.ctx.destination);
-            padOsc.frequency.value = padFreq;
-            padOsc.type = 'sine';
-            padGain.gain.setValueAtTime(t.vol * 0.3, this.ctx.currentTime);
-            padOsc.start();
-            padOsc.stop(this.ctx.currentTime + loopLen);
-            this.bgmNodes.push(padOsc);
-
-            setTimeout(playLoop, loopLen * 1000);
-        };
-
-        playLoop();
+        const src = tracks[theme] || tracks.level1;
+        try {
+            this.currentBGM = new Audio(src);
+            this.currentBGM.loop = true;
+            this.currentBGM.volume = 0.4;
+            this.currentBGM.play().catch(() => {});
+            this.bgmPlaying = true;
+        } catch(e) {}
     }
 
     // ===== 音效 =====

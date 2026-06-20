@@ -226,16 +226,11 @@ class Game {
         setTimeout(() => {
             intro.textContent = level.boss.displayName;
             intro.style.opacity = '1';
-
-            // Boss入场特效
             this.vfx.triggerScreenShake(0.6, 600);
             this.vfx.createUltimateEffect(this.boss.position.clone());
             if (this.boss.aura) this.boss.aura.scale.set(3, 3, 3);
-
             setTimeout(() => { intro.style.opacity = '0'; }, 2500);
             setTimeout(() => this.showPhaseText(level.boss.phaseNames[0]), 3000);
-
-            // 光环缩回
             const shrinkAura = () => {
                 if (this.boss.aura && this.boss.aura.scale.x > 1.05) {
                     this.boss.aura.scale.multiplyScalar(0.95);
@@ -244,14 +239,7 @@ class Game {
             };
             shrinkAura();
         }, 1800);
-
-        setTimeout(() => {
-            document.getElementById('controls').style.opacity = '0';
-            document.getElementById('controls').style.transition = 'opacity 1s';
-        }, 8000);
     }
-
-    showBossIntro() {}
 
     showPhaseText(text) {
         const el = document.getElementById('phase-text');
