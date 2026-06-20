@@ -1,6 +1,12 @@
 // changelog.js - 从 git log 自动生成
 const CHANGELOG = [
     {
+        hash: '206321b',
+        date: '2026-06-21',
+        title: 'fix: 镜面碎片交互修复 + Tab重新锁定鼠标 + 操作说明更新',
+        stats: ' 3 files changed, 39 insertions(+), 9 deletions(-)',
+    },
+    {
         hash: 'dd10afd',
         date: '2026-06-21',
         title: 'feat: 添加start.sh启动脚本（自动更新日志）',
@@ -113,11 +119,5 @@ const CHANGELOG = [
         date: '2026-06-20',
         title: 'v3: 战斗手感+Boss AI+视觉改进+清理测试文件',
         stats: ' 1815 files changed, 6 insertions(+), 431655 deletions(-)',
-    },
-    {
-        hash: '32402c8',
-        date: '2026-06-20',
-        title: '黑神话·林黛玉 v2 - 3关完整Demo + 视觉改进',
-        stats: '',
     },
 ];
