@@ -125,8 +125,8 @@ class Game {
         document.getElementById('ending-screen').addEventListener('click', () => this.restart());
         document.getElementById('pause-resume').addEventListener('click', () => this.resume());
         document.getElementById('pause-menu').addEventListener('click', () => this.backToMenu());
-        document.getElementById('gameover-menu').addEventListener('click', (e) => { e.stopPropagation(); this.backToMenu(); });
-        document.getElementById('victory-menu').addEventListener('click', (e) => { e.stopPropagation(); this.backToMenu(); });
+        document.getElementById('gameover-menu').addEventListener('click', () => this.backToMenu());
+        document.getElementById('victory-menu').addEventListener('click', () => this.backToMenu());
 
         document.addEventListener('keydown', (e) => {
             this.keys[e.key.toLowerCase()] = true;
@@ -273,9 +273,14 @@ class Game {
         document.getElementById('skills-bar').style.display = 'flex';
         document.getElementById('poem').style.display = 'block';
         document.getElementById('crosshair').style.display = 'block';
-        // 隐藏提示
-        document.getElementById('lock-hint').style.display = 'none';
-        document.getElementById('drag-hint').style.display = 'none';
+        // 降级模式显示拖拽提示，否则显示锁定提示
+        if (this.pointerLockFailed) {
+            document.getElementById('lock-hint').style.display = 'none';
+            document.getElementById('drag-hint').style.display = 'block';
+        } else {
+            document.getElementById('lock-hint').style.display = 'block';
+            document.getElementById('drag-hint').style.display = 'none';
+        }
 
         audio.init();
         const bgmThemes = ['level1', 'level2', 'level3'];
@@ -289,24 +294,6 @@ class Game {
         setTimeout(() => { this.player.isInvincible = false; }, 1500);
 
         const level = LEVELS[this.currentLevel];
-
-        // 重新配置BOSS模型（不同关卡不同BOSS类型）
-        this.boss.reconfigure(level.boss);
-        this.boss.setVFX(this.vfx);
-        this.boss.onPhaseChange = (phase) => {
-            this.showPhaseText(level.boss.phaseNames[phase]);
-        };
-
-        // 重新配置场景（不同关卡不同环境）
-        this.world.clear();
-        this.world.init(level.world);
-        this.vfx.clear();
-        this.clearLoot();
-        this.scene.fog = new THREE.Fog(level.world.fogColor, CONFIG.world.fogNear, CONFIG.world.fogFar);
-
-        this.player.respawn();
-        this.cameraAngle = 0;
-
         document.getElementById('boss-name').textContent = level.boss.displayName;
         document.getElementById('level-text').textContent = level.subtitle + ' · ' + level.name;
         document.getElementById('level-text').style.display = 'block';
