@@ -17,70 +17,169 @@ class Player {
     createModel() {
         const group = new THREE.Group();
 
-        // 身体 - 汉服风格
-        const bodyGeo = new THREE.CylinderGeometry(0.3, 0.4, 1.1, 8);
-        const bodyMat = new THREE.MeshStandardMaterial({ color: 0x9370db, roughness: 0.6, metalness: 0.2 });
+        // 淡淡发光光环 - 腰部
+        const auraGeo = new THREE.TorusGeometry(0.5, 0.03, 8, 32);
+        const auraMat = new THREE.MeshBasicMaterial({ color: 0xc4a8ff, transparent: true, opacity: 0.35 });
+        this.aura = new THREE.Mesh(auraGeo, auraMat);
+        this.aura.position.y = 0.5;
+        this.aura.rotation.x = Math.PI / 2;
+        group.add(this.aura);
+
+        // 第二层光环 - 更大更淡
+        const aura2Geo = new THREE.TorusGeometry(0.7, 0.02, 8, 32);
+        const aura2Mat = new THREE.MeshBasicMaterial({ color: 0xffb6c1, transparent: true, opacity: 0.2 });
+        this.aura2 = new THREE.Mesh(aura2Geo, aura2Mat);
+        this.aura2.position.y = 0.3;
+        this.aura2.rotation.x = Math.PI / 2;
+        group.add(this.aura2);
+
+        // 汉服裙摆 - 多层半透明飘逸cone
+        const skirtLayers = [
+            { r: 0.25, h: 0.9, color: 0x8b5cf6, opacity: 0.9 },
+            { r: 0.38, h: 0.75, color: 0x9370db, opacity: 0.6 },
+            { r: 0.50, h: 0.60, color: 0xb19cd9, opacity: 0.4 },
+            { r: 0.58, h: 0.48, color: 0xdda0dd, opacity: 0.25 }
+        ];
+        this.skirtLayers = [];
+        skirtLayers.forEach((layer, i) => {
+            const geo = new THREE.ConeGeometry(layer.r, layer.h, 8);
+            const mat = new THREE.MeshStandardMaterial({
+                color: layer.color, roughness: 0.5, metalness: 0.15,
+                transparent: true, opacity: layer.opacity, side: THREE.DoubleSide
+            });
+            const skirt = new THREE.Mesh(geo, mat);
+            skirt.position.y = 0.12 - i * 0.04;
+            skirt.rotation.x = Math.PI;
+            skirt.castShadow = i === 0;
+            this.skirtLayers.push(skirt);
+            group.add(skirt);
+        });
+
+        // 身体 - 汉服上衣
+        const bodyGeo = new THREE.CylinderGeometry(0.22, 0.28, 0.6, 12);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0x9370db, roughness: 0.5, metalness: 0.2 });
         const body = new THREE.Mesh(bodyGeo, bodyMat);
         body.position.y = 0.55;
         body.castShadow = true;
         group.add(body);
 
-        // 裙子 - 更飘逸
-        const skirtGeo = new THREE.ConeGeometry(0.55, 0.9, 8);
-        const skirtMat = new THREE.MeshStandardMaterial({ color: 0x8b5cf6, roughness: 0.5, metalness: 0.1 });
-        const skirt = new THREE.Mesh(skirtGeo, skirtMat);
-        skirt.position.y = 0.2;
-        skirt.rotation.x = Math.PI;
-        skirt.castShadow = true;
-        group.add(skirt);
+        // 腰带
+        const beltGeo = new THREE.CylinderGeometry(0.29, 0.29, 0.06, 12);
+        const beltMat = new THREE.MeshStandardMaterial({ color: 0xffd700, roughness: 0.3, metalness: 0.8 });
+        const belt = new THREE.Mesh(beltGeo, beltMat);
+        belt.position.y = 0.27;
+        group.add(belt);
 
-        // 头部
-        const headGeo = new THREE.SphereGeometry(0.26, 16, 16);
-        const headMat = new THREE.MeshStandardMaterial({ color: 0xffe4c4, roughness: 0.4, metalness: 0.1 });
+        // 肩部/衣领
+        const collarGeo = new THREE.BoxGeometry(0.52, 0.08, 0.28);
+        const collarMat = new THREE.MeshStandardMaterial({ color: 0xb088f9, roughness: 0.5, metalness: 0.15 });
+        const collar = new THREE.Mesh(collarGeo, collarMat);
+        collar.position.y = 0.88;
+        group.add(collar);
+
+        // 手臂 - 两只
+        for (let i = 0; i < 2; i++) {
+            const armGeo = new THREE.CylinderGeometry(0.06, 0.05, 0.5, 8);
+            const armMat = new THREE.MeshStandardMaterial({ color: 0x9370db, roughness: 0.5, metalness: 0.15 });
+            const arm = new THREE.Mesh(armGeo, armMat);
+            arm.position.set(-0.3 + i * 0.6, 0.55, 0);
+            arm.rotation.z = (i === 0 ? 1 : -1) * 0.3;
+            group.add(arm);
+        }
+
+        // 头部 - 头身比 1:6, 总身高约1.35, 头半径0.225
+        const headGeo = new THREE.SphereGeometry(0.22, 16, 16);
+        const headMat = new THREE.MeshStandardMaterial({ color: 0xffe4c4, roughness: 0.35, metalness: 0.05 });
         const head = new THREE.Mesh(headGeo, headMat);
-        head.position.y = 1.35;
+        head.position.y = 1.15;
         head.castShadow = true;
         group.add(head);
 
-        // 头发 - 长发
-        const hairGeo = new THREE.SphereGeometry(0.29, 16, 16);
-        const hairMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8, metalness: 0.1 });
-        const hair = new THREE.Mesh(hairGeo, hairMat);
-        hair.position.set(0, 1.4, -0.05);
-        hair.scale.set(1, 0.85, 1.15);
-        group.add(hair);
+        // 头发 - 大量发束, 头顶发髻
+        const hairMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.7, metalness: 0.15 });
+        const hairBase = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), hairMat);
+        hairBase.position.set(0, 1.2, -0.04);
+        hairBase.scale.set(1, 0.9, 1.15);
+        group.add(hairBase);
 
-        // 飘带
+        // 发髻
+        const bunGeo = new THREE.SphereGeometry(0.1, 12, 12);
+        const bun = new THREE.Mesh(bunGeo, hairMat);
+        bun.position.set(0, 1.42, 0);
+        bun.scale.set(1.2, 0.8, 1);
+        group.add(bun);
+
+        // 长发 - 多条弯曲cylinder飘动感
+        this.hairStrands = [];
+        for (let i = 0; i < 5; i++) {
+            const angle = (i / 5) * Math.PI * 0.6 - Math.PI * 0.3;
+            const strandGeo = new THREE.CylinderGeometry(0.02, 0.008, 0.8 + i * 0.1, 6);
+            const strand = new THREE.Mesh(strandGeo, hairMat);
+            strand.position.set(
+                Math.sin(angle) * 0.12,
+                0.8 - i * 0.05,
+                -0.2 - i * 0.03
+            );
+            strand.rotation.x = 0.5 + i * 0.08;
+            strand.rotation.z = Math.sin(angle) * 0.3;
+            this.hairStrands.push(strand);
+            group.add(strand);
+        }
+
+        // 两条飘带 - 腰后
+        this.ribbons = [];
         for (let i = 0; i < 2; i++) {
-            const ribbonGeo = new THREE.CylinderGeometry(0.03, 0.015, 0.8, 6);
-            const ribbon = new THREE.Mesh(ribbonGeo, hairMat);
-            ribbon.position.set(-0.15 + i * 0.3, 1.0, -0.25);
-            ribbon.rotation.x = 0.4;
-            ribbon.rotation.z = (i - 0.5) * 0.4;
+            const ribbonGeo = new THREE.CylinderGeometry(0.025, 0.01, 1.0, 6);
+            const ribbonMat = new THREE.MeshStandardMaterial({
+                color: 0xdda0dd, roughness: 0.4, metalness: 0.1,
+                transparent: true, opacity: 0.7
+            });
+            const ribbon = new THREE.Mesh(ribbonGeo, ribbonMat);
+            ribbon.position.set(-0.1 + i * 0.2, 0.3, -0.35);
+            ribbon.rotation.x = 0.6;
+            ribbon.rotation.z = (i - 0.5) * 0.35;
+            this.ribbons.push(ribbon);
             group.add(ribbon);
         }
 
-        // 眼睛
-        const eyeGeo = new THREE.SphereGeometry(0.04, 8, 8);
+        // 眼睛 - 大眼 + 白色高光
+        const eyeGeo = new THREE.SphereGeometry(0.05, 12, 12);
         const eyeMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
         const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-        leftEye.position.set(-0.08, 1.37, 0.22);
+        leftEye.position.set(-0.08, 1.17, 0.19);
         group.add(leftEye);
         const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-        rightEye.position.set(0.08, 1.37, 0.22);
+        rightEye.position.set(0.08, 1.17, 0.19);
         group.add(rightEye);
 
+        // 眼睛白色高光
+        const hlGeo = new THREE.SphereGeometry(0.018, 8, 8);
+        const hlMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const hlL = new THREE.Mesh(hlGeo, hlMat);
+        hlL.position.set(-0.065, 1.185, 0.23);
+        group.add(hlL);
+        const hlR = new THREE.Mesh(hlGeo, hlMat);
+        hlR.position.set(0.095, 1.185, 0.23);
+        group.add(hlR);
+
         // 眉毛 - 愁眉
-        const browGeo = new THREE.BoxGeometry(0.1, 0.02, 0.02);
+        const browGeo = new THREE.BoxGeometry(0.09, 0.015, 0.02);
         const browMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
         const leftBrow = new THREE.Mesh(browGeo, browMat);
-        leftBrow.position.set(-0.08, 1.43, 0.23);
-        leftBrow.rotation.z = 0.2;
+        leftBrow.position.set(-0.08, 1.25, 0.2);
+        leftBrow.rotation.z = 0.25;
         group.add(leftBrow);
         const rightBrow = new THREE.Mesh(browGeo, browMat);
-        rightBrow.position.set(0.08, 1.43, 0.23);
-        rightBrow.rotation.z = -0.2;
+        rightBrow.position.set(0.08, 1.25, 0.2);
+        rightBrow.rotation.z = -0.25;
         group.add(rightBrow);
+
+        // 嘴巴
+        const mouthGeo = new THREE.BoxGeometry(0.05, 0.012, 0.01);
+        const mouthMat = new THREE.MeshBasicMaterial({ color: 0xcc6666 });
+        const mouth = new THREE.Mesh(mouthGeo, mouthMat);
+        mouth.position.set(0, 1.1, 0.21);
+        group.add(mouth);
 
         // 花锄 (武器)
         this.weapon = this.createWeapon();
@@ -94,21 +193,73 @@ class Player {
 
     createWeapon() {
         const group = new THREE.Group();
-        const handleGeo = new THREE.CylinderGeometry(0.03, 0.03, 2, 8);
-        const handleMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.8, metalness: 0.2 });
+
+        // 木质手柄 - 竹节纹理
+        const handleGeo = new THREE.CylinderGeometry(0.025, 0.03, 1.8, 8);
+        const handleMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.7, metalness: 0.25 });
         const handle = new THREE.Mesh(handleGeo, handleMat);
         handle.rotation.z = Math.PI / 4;
         group.add(handle);
 
-        const bladeGeo = new THREE.BoxGeometry(0.45, 0.35, 0.06);
+        // 竹节装饰环
+        for (let i = 0; i < 3; i++) {
+            const ringGeo = new THREE.TorusGeometry(0.035, 0.006, 6, 12);
+            const ringMat = new THREE.MeshStandardMaterial({ color: 0x6b3410, roughness: 0.6, metalness: 0.3 });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.position.set(0, -0.4 + i * 0.4, 0);
+            ring.rotation.x = Math.PI / 2;
+            group.add(ring);
+        }
+
+        // 刃部 - 弧形锄刃
+        const bladeGeo = new THREE.BoxGeometry(0.4, 0.3, 0.04);
         const bladeMat = new THREE.MeshStandardMaterial({
-            color: CONFIG.colors.primary, roughness: 0.3, metalness: 0.7,
-            emissive: CONFIG.colors.primary, emissiveIntensity: 0.4
+            color: CONFIG.colors.primary, roughness: 0.15, metalness: 0.85,
+            emissive: CONFIG.colors.primary, emissiveIntensity: 0.3
         });
         const blade = new THREE.Mesh(bladeGeo, bladeMat);
-        blade.position.set(-0.35, 0.85, 0);
+        blade.position.set(-0.3, 0.8, 0);
         blade.rotation.z = -Math.PI / 4;
         group.add(blade);
+
+        // 刃口光泽边缘 - 更亮的金属边
+        const edgeGeo = new THREE.BoxGeometry(0.42, 0.02, 0.05);
+        const edgeMat = new THREE.MeshStandardMaterial({
+            color: 0xff6680, roughness: 0.05, metalness: 0.95,
+            emissive: 0xff6680, emissiveIntensity: 0.6
+        });
+        const edge = new THREE.Mesh(edgeGeo, edgeMat);
+        edge.position.set(-0.3, 0.96, 0);
+        edge.rotation.z = -Math.PI / 4;
+        group.add(edge);
+
+        // 花朵装饰 - 刃部顶端
+        const petalMat = new THREE.MeshStandardMaterial({
+            color: CONFIG.colors.petal, roughness: 0.4, metalness: 0.1,
+            emissive: CONFIG.colors.petal, emissiveIntensity: 0.2, transparent: true, opacity: 0.85
+        });
+        for (let i = 0; i < 5; i++) {
+            const angle = (i / 5) * Math.PI * 2;
+            const petalGeo = new THREE.SphereGeometry(0.04, 8, 8);
+            const petal = new THREE.Mesh(petalGeo, petalMat);
+            petal.position.set(
+                -0.3 + Math.cos(angle) * 0.08,
+                0.8 + Math.sin(angle) * 0.08,
+                0.03
+            );
+            petal.scale.set(1, 0.5, 0.3);
+            group.add(petal);
+        }
+        // 花蕊
+        const coreGeo = new THREE.SphereGeometry(0.025, 8, 8);
+        const coreMat = new THREE.MeshStandardMaterial({
+            color: 0xffd700, roughness: 0.3, metalness: 0.7,
+            emissive: 0xffd700, emissiveIntensity: 0.4
+        });
+        const core = new THREE.Mesh(coreGeo, coreMat);
+        core.position.set(-0.3, 0.8, 0.04);
+        group.add(core);
+
         return group;
     }
 
@@ -130,13 +281,18 @@ class Player {
 
         if (keys['w'] || keys['arrowup']) moveDir.add(forward);
         if (keys['s'] || keys['arrowdown']) moveDir.sub(forward);
-        if (keys['a'] || keys['arrowleft']) moveDir.sub(right);
-        if (keys['d'] || keys['arrowright']) moveDir.add(right);
+        if (keys['a'] || keys['arrowleft']) moveDir.add(right);
+        if (keys['d'] || keys['arrowright']) moveDir.sub(right);
 
         if (moveDir.lengthSq() > 0 && !this.isDashing) {
             moveDir.normalize();
             this.position.x += moveDir.x * CONFIG.player.moveSpeed * delta;
             this.position.z += moveDir.z * CONFIG.player.moveSpeed * delta;
+            // 走路摆动
+            this.mesh.position.y = CONFIG.player.height / 2 + Math.sin(Date.now() * 0.01) * 0.05;
+        } else {
+            // 站立呼吸
+            this.mesh.position.y = CONFIG.player.height / 2 + Math.sin(Date.now() * 0.002) * 0.03;
         }
 
         const limit = CONFIG.world.size * 0.45;
@@ -147,7 +303,8 @@ class Player {
             this.dash(moveDir.length() > 0 ? moveDir.normalize() : forward.clone());
         }
 
-        this.mesh.position.copy(this.position);
+        this.mesh.position.x = this.position.x;
+        this.mesh.position.z = this.position.z;
 
         if (this.weapon) {
             this.weapon.rotation.z += delta * 2;
