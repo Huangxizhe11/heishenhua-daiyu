@@ -139,6 +139,7 @@ class Game {
     startGame() {
         document.getElementById('start-screen').style.display = 'none';
         this.currentLevel = 0;
+        audio.init();
         try { audio.playBGM('prologue'); } catch(e) {}
         try {
             this.showStoryScreen(PROLOGUE, () => {
