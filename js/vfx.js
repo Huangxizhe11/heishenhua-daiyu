@@ -105,6 +105,153 @@ class VFXManager {
         }
     }
 
+    createComboEffect(position, direction, stage) {
+        const colors = [0xffffff, 0xffb6c1, 0xe94560];
+        const color = colors[stage] || 0xffffff;
+        // 剑气波
+        const waveGeo = new THREE.SphereGeometry(0.6 + stage * 0.2, 8, 4);
+        waveGeo.scale(1, 0.15, 2.5 + stage * 0.5);
+        const waveMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9 });
+        const wave = new THREE.Mesh(waveGeo, waveMat);
+        wave.position.copy(position).add(direction.clone().multiplyScalar(1.5));
+        wave.rotation.y = -Math.atan2(direction.x, direction.z);
+        this.scene.add(wave);
+        this.particles.push({ mesh: wave, velocity: direction.clone().multiplyScalar(12), life: 0.3, decay: 4 });
+        // 拖尾
+        for (let i = 0; i < 4 + stage * 2; i++) {
+            const spark = this.createParticle(position.clone().add(direction.clone().multiplyScalar(0.5 + i * 0.3)), color, 0.2);
+            spark.velocity = direction.clone().multiplyScalar(8 + Math.random() * 4);
+            spark.velocity.y += (Math.random() - 0.5) * 2;
+            spark.life = 0.3 + stage * 0.1;
+            this.particles.push(spark);
+        }
+        // 第三段花瓣爆发
+        if (stage === 2) {
+            for (let i = 0; i < 12; i++) {
+                const angle = (i / 12) * Math.PI * 2;
+                const petal = this.createPetal(position.clone().add(new THREE.Vector3(Math.cos(angle) * 1, 0.5, Math.sin(angle) * 1)), CONFIG.colors.petal);
+                petal.velocity = new THREE.Vector3(Math.cos(angle) * 4, 2 + Math.random() * 2, Math.sin(angle) * 4);
+                petal.life = 1;
+                this.particles.push(petal);
+            }
+        }
+    }
+
+    createChargeEffect(position, chargeRatio) {
+        const intensity = chargeRatio;
+        const color = intensity > 0.8 ? 0xe94560 : 0xffb6c1;
+        // 环绕粒子
+        const count = Math.floor(3 + intensity * 8);
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2 + Date.now() * 0.003;
+            const r = 0.8 + intensity * 0.5;
+            const p = this.createParticle(position.clone().add(new THREE.Vector3(Math.cos(angle) * r, 0.5 + Math.random(), Math.sin(angle) * r)), color, 0.15 + intensity * 0.1);
+            p.velocity = new THREE.Vector3(Math.cos(angle) * 0.5, 1 + Math.random(), Math.sin(angle) * 0.5);
+            p.life = 0.5;
+            this.particles.push(p);
+        }
+        // 地面光环（原神风格蓄力指示）
+        if (!this._chargeRing) {
+            const ringGeo = new THREE.TorusGeometry(1, 0.05, 8, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xffb6c1, transparent: true, opacity: 0.6 });
+            this._chargeRing = new THREE.Mesh(ringGeo, ringMat);
+            this._chargeRing.rotation.x = Math.PI / 2;
+            this.scene.add(this._chargeRing);
+        }
+        this._chargeRing.position.set(position.x, 0.1, position.z);
+        this._chargeRing.scale.set(0.5 + intensity * 1, 0.5 + intensity * 1, 1);
+        this._chargeRing.material.opacity = 0.4 + intensity * 0.4;
+        this._chargeRing.material.color.set(intensity > 0.8 ? 0xe94560 : 0xffb6c1);
+    }
+
+    clearChargeEffect() {
+        if (this._chargeRing) {
+            this.scene.remove(this._chargeRing);
+            this._chargeRing = null;
+        }
+    }
+
+    createChargeReleaseEffect(position, direction, chargeRatio) {
+        const size = 0.8 + chargeRatio * 1.5;
+        const color = chargeRatio > 0.8 ? 0xe94560 : 0xffb6c1;
+        const waveGeo = new THREE.SphereGeometry(size, 12, 6);
+        waveGeo.scale(1, 0.2, 2.5);
+        const waveMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.95 });
+        const wave = new THREE.Mesh(waveGeo, waveMat);
+        wave.position.copy(position).add(direction.clone().multiplyScalar(2));
+        wave.rotation.y = -Math.atan2(direction.x, direction.z);
+        this.scene.add(wave);
+        this.particles.push({ mesh: wave, velocity: direction.clone().multiplyScalar(15), life: 0.4, decay: 3 });
+        for (let i = 0; i < 15; i++) {
+            const spark = this.createParticle(position.clone().add(direction.clone().multiplyScalar(1 + Math.random())), color, 0.25);
+            spark.velocity = direction.clone().multiplyScalar(10 + Math.random() * 5);
+            spark.velocity.y += (Math.random() - 0.5) * 4;
+            spark.life = 0.5;
+            this.particles.push(spark);
+        }
+        if (chargeRatio > 0.8) {
+            for (let i = 0; i < 20; i++) {
+                const angle = (i / 20) * Math.PI * 2;
+                const petal = this.createPetal(position.clone().add(new THREE.Vector3(Math.cos(angle) * 1.5, 0.5, Math.sin(angle) * 1.5)), CONFIG.colors.petal);
+                petal.velocity = new THREE.Vector3(Math.cos(angle) * 5, 3 + Math.random() * 3, Math.sin(angle) * 5);
+                petal.life = 1.2;
+                this.particles.push(petal);
+            }
+        }
+    }
+
+    createPerfectDodgeEffect(position) {
+        // 大量冰蓝粒子爆散
+        for (let i = 0; i < 40; i++) {
+            const angle = (i / 40) * Math.PI * 2;
+            const r = 1 + Math.random() * 0.5;
+            const p = this.createParticle(position.clone().add(new THREE.Vector3(Math.cos(angle) * r, 0.3 + Math.random() * 1.5, Math.sin(angle) * r)), 0x87ceeb, 0.35);
+            p.velocity = new THREE.Vector3(Math.cos(angle) * 8, 3 + Math.random() * 4, Math.sin(angle) * 8);
+            p.life = 1;
+            this.particles.push(p);
+        }
+        // 三重扩散光环
+        for (let i = 0; i < 3; i++) {
+            const ringGeo = new THREE.TorusGeometry(1.2 + i * 0.5, 0.08, 8, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: i === 0 ? 0xffffff : 0x87ceeb, transparent: true, opacity: 0.9 - i * 0.2 });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.position.copy(position);
+            ring.position.y += 0.5;
+            ring.rotation.x = Math.PI / 2;
+            this.scene.add(ring);
+            const delay = i * 80;
+            setTimeout(() => {
+                const expand = () => {
+                    ring.scale.multiplyScalar(1.08);
+                    ring.material.opacity -= 0.025;
+                    if (ring.material.opacity > 0) requestAnimationFrame(expand);
+                    else this.scene.remove(ring);
+                };
+                expand();
+            }, delay);
+        }
+        // 时间减速视觉：全屏蓝色闪烁
+        const flash = document.createElement('div');
+        Object.assign(flash.style, {
+            position: 'fixed', top: '0', left: '0', width: '100%', height: '100%',
+            backgroundColor: '#87ceeb', opacity: '0', pointerEvents: 'none',
+            zIndex: '200', transition: 'opacity 0.15s'
+        });
+        document.body.appendChild(flash);
+        requestAnimationFrame(() => { flash.style.opacity = '0.3'; });
+        setTimeout(() => { flash.style.opacity = '0'; }, 200);
+        setTimeout(() => flash.remove(), 500);
+    }
+
+    createTearHitEffect(position) {
+        for (let i = 0; i < 6; i++) {
+            const p = this.createTear(position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1, 1 + Math.random(), (Math.random() - 0.5) * 1)));
+            p.velocity = new THREE.Vector3((Math.random() - 0.5) * 3, 2 + Math.random() * 2, (Math.random() - 0.5) * 3);
+            p.life = 0.8;
+            this.particles.push(p);
+        }
+    }
+
     createSkillEffect(position, range) {
         for (let i = 0; i < 40; i++) {
             const angle = Math.random() * Math.PI * 2;

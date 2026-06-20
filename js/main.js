@@ -1,3 +1,4 @@
+console.log('=== main.js loaded v2 ===');
 class Game {
     constructor() {
         this.scene = null;
@@ -122,8 +123,8 @@ class Game {
         document.getElementById('ending-screen').addEventListener('click', () => this.restart());
         document.getElementById('pause-resume').addEventListener('click', () => this.resume());
         document.getElementById('pause-menu').addEventListener('click', () => this.backToMenu());
-        document.getElementById('gameover-menu').addEventListener('click', () => this.backToMenu());
-        document.getElementById('victory-menu').addEventListener('click', () => this.backToMenu());
+        document.getElementById('gameover-menu').addEventListener('click', (e) => { e.stopPropagation(); this.backToMenu(); });
+        document.getElementById('victory-menu').addEventListener('click', (e) => { e.stopPropagation(); this.backToMenu(); });
 
         document.addEventListener('keydown', (e) => {
             this.keys[e.key.toLowerCase()] = true;
@@ -164,15 +165,19 @@ class Game {
             }
             // 指针锁失败降级：左键拖拽旋转+松开攻击；右键直接放技能
             if (this.pointerLockFailed) {
-                if (e.button === 0) { this._dragging = true; this.mouse.left = true; this.playerAttack(); return; }
+                if (e.button === 0) { this._dragging = true; this.mouse.left = true; this.playerStartCharge(); return; }
                 if (e.button === 2) { this.mouse.right = true; this.playerUseSkill(); return; }
             }
-            if (e.button === 0) { this.mouse.left = true; this.playerAttack(); }
+            if (e.button === 0) { this.mouse.left = true; this.playerStartCharge(); }
             if (e.button === 2) { this.mouse.right = true; this.playerUseSkill(); }
         });
 
         document.addEventListener('mouseup', (e) => {
-            if (e.button === 0) { this.mouse.left = false; this._dragging = false; }
+            if (e.button === 0) {
+                this.mouse.left = false;
+                this._dragging = false;
+                if (this.player.isCharging) this.playerReleaseCharge();
+            }
             if (e.button === 2) this.mouse.right = false;
         });
 
@@ -467,11 +472,19 @@ class Game {
         this.vfx.update(delta);
         this.vfx.playerPosition = this.player.position;
 
+        // 蓄力特效
+        if (this.player.isCharging) {
+            this.vfx.createChargeEffect(this.player.position.clone(), this.player.chargeTime / COMBAT.chargeMaxTime);
+        } else {
+            this.vfx.clearChargeEffect();
+        }
+
         this.checkProjectileHits();
         this.checkFireTrailDamage(delta);
         this.updateCamera(delta);
         this.updateHUD();
         this.updateSkillCooldowns();
+        this.updateComboStageUI();
 
         if (this.player.mp < CONFIG.player.maxMp) {
             this.player.mp += 8 * delta;
@@ -506,12 +519,37 @@ class Game {
             const attackPos = this.player.position.clone();
             attackPos.y += 1.2;
             attack.position = attackPos;
-            // 攻击朝十字准星方向（远离相机）
             const dir = this.player.getDirection();
             attack.direction = dir;
-            this.vfx.createAttackEffect(attackPos, dir, attack.type);
-            this.vfx.triggerScreenShake(0.15, 100);
+            this.vfx.createComboEffect(attackPos, dir, attack.stage || 0);
+            this.vfx.triggerScreenShake(0.1 + (attack.stage || 0) * 0.05, 100 + (attack.stage || 0) * 50);
             this.checkPlayerHit(attack);
+        }
+    }
+
+    playerStartCharge() {
+        if (this.player.startCharge()) {
+            audio.playChargeStart();
+        }
+    }
+
+    playerCancelCharge() {
+        this.player.cancelCharge();
+        this.vfx.clearChargeEffect();
+    }
+
+    playerReleaseCharge() {
+        this.vfx.clearChargeEffect();
+        const charge = this.player.releaseCharge();
+        if (charge) {
+            const chargePos = this.player.position.clone();
+            chargePos.y += 1.2;
+            charge.position = chargePos;
+            const dir = this.player.getDirection();
+            charge.direction = dir;
+            this.vfx.createChargeReleaseEffect(chargePos, dir, charge.chargeRatio);
+            this.vfx.triggerScreenShake(0.2 + charge.chargeRatio * 0.3, 200 + charge.chargeRatio * 200);
+            this.checkPlayerHit(charge);
         }
     }
 
@@ -594,13 +632,40 @@ class Game {
                 );
             }
 
+            // 天魁星后范围扩大
+            let actualRange = attack.range;
+            if (this.player.skillBuff === 'ultimate') {
+                actualRange *= COMBAT.ultimateBuffRangeMultiplier;
+            }
+
             const killed = this.boss.takeDamage(actualDamage);
             this.vfx.createDamageDecal(this.boss.position);
+
+            let dmgType = attack.type === 'ultimate' || attack.type === 'charge' ? 'crit' : 'normal';
+            if (attack.stage === 2) dmgType = 'crit';
             this.vfx.createDamageNumber(
                 this.boss.position.clone().add(new THREE.Vector3(0, 2.5, 0)),
-                actualDamage, attack.type === 'ultimate' ? 'crit' : 'normal'
+                actualDamage, dmgType
             );
-            this.vfx.triggerScreenShake(attack.type === 'ultimate' ? 0.3 : 0.1, attack.type === 'ultimate' ? 250 : 100);
+
+            let shakeIntensity = attack.type === 'ultimate' ? 0.3 : attack.type === 'charge' ? 0.2 + (attack.chargeRatio || 0) * 0.2 : 0.1;
+            this.vfx.triggerScreenShake(shakeIntensity, 100 + (attack.stage || 0) * 50);
+
+            // 泪雨后附带泪滴特效
+            if (this.player.skillBuff === 'tear') {
+                this.vfx.createTearHitEffect(this.boss.position.clone());
+            }
+
+            // 颦颦一笑后命中回血
+            if (this.player.skillBuff === 'charm') {
+                this.player.heal(COMBAT.charmBuffHealPerHit);
+                this.vfx.createDamageNumber(
+                    this.player.position.clone().add(new THREE.Vector3(0, 3, 0)),
+                    COMBAT.charmBuffHealPerHit, 'heal'
+                );
+                this.player.skillBuffCount--;
+                if (this.player.skillBuffCount <= 0) this.player.skillBuff = null;
+            }
 
             this.player.combo++;
             this.player.comboTimer = 2;
@@ -616,6 +681,19 @@ class Game {
     }
 
     processBossAttack(attack) {
+        // 完美闪避检测
+        if (this.player.perfectDodgeActive) {
+            this.player.triggerPerfectDodge();
+            this.vfx.createPerfectDodgeEffect(this.player.position.clone());
+            this.vfx.triggerScreenShake(0.3, 300);
+            this.vfx.createDamageNumber(
+                this.player.position.clone().add(new THREE.Vector3(0, 3, 0)),
+                '完美闪避！', 'crit'
+            );
+            // 时停BOSS
+            this.boss.stun(0.8);
+            return;
+        }
         if (attack.type === 'melee') {
             const dist = this.player.position.distanceTo(this.boss.position);
             if (dist <= attack.range + 1) {
@@ -907,6 +985,39 @@ class Game {
             el.style.textShadow = `0 0 ${8 + this.player.combo}px ${color}`;
             clearTimeout(this._comboTimeout);
             this._comboTimeout = setTimeout(() => el.classList.remove('show'), 1200);
+        }
+    }
+
+    updateComboStageUI() {
+        const stageEl = document.getElementById('combo-stage');
+        const chargeEl = document.getElementById('charge-bar');
+        const buffEl = document.getElementById('skill-buff');
+        if (!stageEl || !chargeEl || !buffEl) return;
+        // 连招阶段
+        if (this.player.comboStageTimer > 0) {
+            stageEl.style.display = 'block';
+            stageEl.textContent = '连招 ' + (this.player.comboStage + 1) + '/3';
+            stageEl.style.color = ['#ffb6c1', '#ff69b4', '#ff1493'][this.player.comboStage];
+        } else {
+            stageEl.style.display = 'none';
+        }
+        // 蓄力条
+        if (this.player.isCharging) {
+            chargeEl.style.display = 'block';
+            const ratio = this.player.chargeTime / COMBAT.chargeMaxTime;
+            chargeEl.querySelector('.charge-fill').style.width = (ratio * 100) + '%';
+            chargeEl.querySelector('.charge-fill').style.background = ratio >= 0.8 ? '#ff1493' : '#ffb6c1';
+        } else {
+            chargeEl.style.display = 'none';
+        }
+        // 技能强化
+        if (this.player.skillBuff) {
+            buffEl.style.display = 'block';
+            const names = { tear: '泪雨强化', ultimate: '天魁星强化', charm: '颦颦一笑强化' };
+            buffEl.textContent = names[this.player.skillBuff] + ' x' + this.player.skillBuffCount;
+            buffEl.style.color = { tear: '#87ceeb', ultimate: '#ffd700', charm: '#ffb6c1' }[this.player.skillBuff];
+        } else {
+            buffEl.style.display = 'none';
         }
     }
 

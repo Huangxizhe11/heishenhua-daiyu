@@ -14,6 +14,24 @@ class Player {
         this.comboTimer = 0;
         this.slowTimer = 0;   // 减速状态（冷香寒气）
         this.rootTimer = 0;   // 禁锢状态（牡丹绽放）
+        // 连招系统
+        this.comboStage = 0;
+        this.comboStageTimer = 0;
+        this.isComboAttacking = false;
+        this.comboAttackTimer = 0;
+        // 蓄力攻击
+        this.isCharging = false;
+        this.chargeTime = 0;
+        // 完美闪避
+        this.perfectDodgeActive = false;
+        this.perfectDodgeTimer = 0;
+        this.perfectDodgeBonus = false;
+        this.perfectDodgeBonusTimer = 0;
+        this.dodgeInvincibleTimer = 0;
+        // 技能强化
+        this.skillBuff = null;
+        this.skillBuffTimer = 0;
+        this.skillBuffCount = 0;
         this.createModel();
     }
 
@@ -281,6 +299,38 @@ class Player {
             this.comboTimer -= delta;
             if (this.comboTimer <= 0) this.combo = 0;
         }
+        // 连招系统更新
+        if (this.comboStageTimer > 0) {
+            this.comboStageTimer -= delta;
+            if (this.comboStageTimer <= 0) this.comboStage = 0;
+        }
+        if (this.isComboAttacking) {
+            this.comboAttackTimer -= delta;
+            if (this.comboAttackTimer <= 0) this.isComboAttacking = false;
+        }
+        if (this.isCharging) {
+            this.chargeTime += delta;
+            if (this.chargeTime > COMBAT.chargeMaxTime) this.chargeTime = COMBAT.chargeMaxTime;
+        }
+        if (this.perfectDodgeActive) {
+            this.perfectDodgeTimer -= delta;
+            if (this.perfectDodgeTimer <= 0) this.perfectDodgeActive = false;
+        }
+        if (this.perfectDodgeBonus) {
+            this.perfectDodgeBonusTimer -= delta;
+            if (this.perfectDodgeBonusTimer <= 0) this.perfectDodgeBonus = false;
+        }
+        if (this.dodgeInvincibleTimer > 0) {
+            this.dodgeInvincibleTimer -= delta;
+            if (this.dodgeInvincibleTimer <= 0) {
+                this.isInvincible = false;
+                this.setInvincibleVisual(false);
+            }
+        }
+        if (this.skillBuff) {
+            this.skillBuffTimer -= delta;
+            if (this.skillBuffTimer <= 0) { this.skillBuff = null; this.skillBuffCount = 0; }
+        }
 
         // 相机方向向量
         const forward = new THREE.Vector3(-Math.sin(cameraAngle), 0, -Math.cos(cameraAngle));
@@ -297,6 +347,7 @@ class Player {
         const isRooted = this.rootTimer > 0;
         // 减速状态：移速减半
         const speedMul = this.slowTimer > 0 ? 0.45 : 1;
+        const comboSpeedMul = this.isComboAttacking ? 0.3 : 1;
 
         if (this.isDashing) {
             // 翻滚中不处理移动
@@ -307,7 +358,7 @@ class Player {
         } else if (inputDir.lengthSq() > 0) {
             // 有输入 → 加速
             inputDir.normalize();
-            const targetSpeed = CONFIG.player.moveSpeed * speedMul;
+            const targetSpeed = CONFIG.player.moveSpeed * speedMul * comboSpeedMul;
             this.velocity.x += (inputDir.x * targetSpeed - this.velocity.x) * Math.min(1, delta * 12);
             this.velocity.z += (inputDir.z * targetSpeed - this.velocity.z) * Math.min(1, delta * 12);
         } else {
@@ -331,6 +382,8 @@ class Player {
         if (keys[' '] && this.canDash && !this.isDashing) {
             const dashDir = inputDir.lengthSq() > 0 ? inputDir.normalize() : forward.clone();
             this.dash(dashDir);
+            this.perfectDodgeActive = true;
+            this.perfectDodgeTimer = COMBAT.perfectDodgeWindow;
         }
 
         // 位置更新
@@ -387,6 +440,7 @@ class Player {
     }
 
     dash(direction) {
+        this.cancelCharge();
         if (!this.canDash || this.mp < 20) return;
         this.isDashing = true;
         this.isInvincible = true;
@@ -415,40 +469,110 @@ class Player {
                 this.mesh.rotation.x = 0;
                 this.velocity.x = dashDir.x * CONFIG.player.moveSpeed * 0.5;
                 this.velocity.z = dashDir.z * CONFIG.player.moveSpeed * 0.5;
-                setTimeout(() => {
-                    this.isInvincible = false;
-                    this.setInvincibleVisual(false);
-                }, CONFIG.player.invincibleDuration * 1000);
+                this.dodgeInvincibleTimer = CONFIG.player.invincibleDuration;
                 setTimeout(() => { this.canDash = true; }, CONFIG.player.dashCooldown * 1000);
             }
         };
         dashAnim();
     }
+    triggerPerfectDodge() {
+        this.perfectDodgeActive = false;
+        this.perfectDodgeBonus = true;
+        this.perfectDodgeBonusTimer = 3;
+        this.setPerfectDodgeVisual(true);
+        setTimeout(() => this.setPerfectDodgeVisual(false), 1000);
+        return true;
+    }
+    setPerfectDodgeVisual(on) {
+        if (!this.mesh) return;
+        this.mesh.traverse(child => {
+            if (child.isMesh && child.material && child.material.emissive) {
+                try {
+                    if (on) { child.material._oe = child.material.emissive.getHex(); child.material._oei = child.material.emissiveIntensity; child.material.emissive.setHex(0x87ceeb); child.material.emissiveIntensity = 1.0; }
+                    else { child.material.emissive.setHex(child.material._oe || 0); child.material.emissiveIntensity = child.material._oei || 0; }
+                } catch(e) {}
+            }
+        });
+    }
+    applySkillBuff(buffType) {
+        this.skillBuff = buffType;
+        this.skillBuffTimer = COMBAT.skillBuffDuration;
+        if (buffType === 'tear') this.skillBuffCount = COMBAT.tearBuffCount;
+        else if (buffType === 'charm') this.skillBuffCount = COMBAT.charmBuffCount;
+        else if (buffType === 'ultimate') this.skillBuffCount = 999;
+    }
 
     attack() {
-        if (this.cooldowns.attack > 0 || this.hp <= 0) return null;
+        if (this.cooldowns.attack > 0 || this.hp <= 0 || this.isComboAttacking) return null;
+        const stage = this.comboStage;
+        const multiplier = COMBAT.comboDamageMultipliers[stage] || 1;
+        const range = COMBAT.comboRanges[stage] || SKILLS.normal.range;
+        let damage = SKILLS.normal.damage * multiplier;
+        if (this.perfectDodgeBonus) { damage *= COMBAT.perfectDodgeBonus; this.perfectDodgeBonus = false; }
+        if (this.skillBuff === 'tear') {
+            damage *= COMBAT.tearBuffDamageMultiplier;
+            this.skillBuffCount--;
+            if (this.skillBuffCount <= 0) this.skillBuff = null;
+        }
+        this.mp = Math.min(CONFIG.player.maxMp, this.mp + COMBAT.mpPerHit);
+        if (stage === 2) this.mp = Math.min(CONFIG.player.maxMp, this.mp + COMBAT.mpPerComboFinish);
         this.cooldowns.attack = SKILLS.normal.cooldown;
-        this.combo++;
+        this.isComboAttacking = true;
+        this.comboAttackTimer = 0.3;
+        this.combo = stage + 1;
         this.comboTimer = 2;
-
-        audio.playAttack();
-        this.weapon.rotation.z = -Math.PI / 2;
-        setTimeout(() => { this.weapon.rotation.z = 0; }, 200);
-
-        return {
-            type: 'normal',
-            damage: SKILLS.normal.damage * (1 + this.combo * 0.1),
-            range: SKILLS.normal.range,
-            position: this.position.clone(),
-            direction: this.getDirection()
-        };
+        if (stage === 0) audio.playAttack();
+        else if (stage === 1) audio.playAttackCombo2();
+        else audio.playAttackCombo3();
+        if (this.weapon) {
+            if (stage === 0) { this.weapon.rotation.z = -Math.PI / 2; setTimeout(() => { if (this.weapon) this.weapon.rotation.z = 0; }, 200); }
+            else if (stage === 1) { this.weapon.rotation.z = -Math.PI; setTimeout(() => { if (this.weapon) this.weapon.rotation.z = 0; }, 250); }
+            else { this.weapon.rotation.z = -Math.PI * 1.5; setTimeout(() => { if (this.weapon) this.weapon.rotation.z = 0; }, 300); }
+        }
+        this.comboStage = (stage + 1) % 3;
+        this.comboStageTimer = COMBAT.comboWindow;
+        return { type: 'normal', stage: stage, damage: damage, range: range, position: this.position.clone(), direction: this.getDirection() };
     }
+    startCharge() {
+        if (this.cooldowns.attack > 0 || this.hp <= 0 || this.isComboAttacking) return false;
+        this.isCharging = true;
+        this.chargeTime = 0;
+        return true;
+    }
+    releaseCharge() {
+        if (!this.isCharging) return null;
+        this.isCharging = false;
+        // 短按 = 普通连招攻击
+        if (this.chargeTime < COMBAT.chargeMinTime) {
+            return this.attack();
+        }
+        const chargeRatio = Math.min(this.chargeTime / COMBAT.chargeMaxTime, 1);
+        const damageMultiplier = 1 + (COMBAT.chargeDamageMultiplier - 1) * chargeRatio;
+        const rangeMultiplier = 1 + (COMBAT.chargeRangeMultiplier - 1) * chargeRatio;
+        let damage = SKILLS.normal.damage * damageMultiplier;
+        if (this.perfectDodgeBonus) { damage *= COMBAT.perfectDodgeBonus; this.perfectDodgeBonus = false; }
+        if (this.skillBuff === 'tear') {
+            damage *= COMBAT.tearBuffDamageMultiplier;
+            this.skillBuffCount--;
+            if (this.skillBuffCount <= 0) this.skillBuff = null;
+        }
+        this.mp = Math.min(CONFIG.player.maxMp, this.mp + COMBAT.mpPerHit * 2);
+        this.cooldowns.attack = SKILLS.normal.cooldown * 1.5;
+        if (chargeRatio >= 0.8) audio.playChargeFull();
+        else audio.playChargeRelease();
+        if (this.weapon) { this.weapon.rotation.z = -Math.PI * 2; setTimeout(() => { if (this.weapon) this.weapon.rotation.z = 0; }, 400); }
+        this.comboStage = 0;
+        this.comboStageTimer = 0;
+        return { type: 'charge', damage: damage, range: SKILLS.normal.range * rangeMultiplier, position: this.position.clone(), direction: this.getDirection(), chargeRatio: chargeRatio };
+    }
+    cancelCharge() { this.isCharging = false; this.chargeTime = 0; }
 
     useSkill() {
         if (this.cooldowns.skill > 0 || this.mp < SKILLS.skill.mpCost || this.hp <= 0) return null;
         this.cooldowns.skill = SKILLS.skill.cooldown;
         this.mp -= SKILLS.skill.mpCost;
         audio.playSkill();
+        this.applySkillBuff('tear');
 
         return {
             type: 'skill',
@@ -464,6 +588,7 @@ class Player {
         this.cooldowns.ultimate = SKILLS.ultimate.cooldown;
         this.mp -= SKILLS.ultimate.mpCost;
         audio.playUltimate();
+        this.applySkillBuff('ultimate');
 
         return {
             type: 'ultimate',
@@ -480,6 +605,7 @@ class Player {
         this.heal(SKILLS.charm.healAmount);
         this.restoreMp(SKILLS.charm.mpRestore);
         audio.playCharm();
+        this.applySkillBuff('charm');
 
         return {
             type: 'charm',
@@ -544,6 +670,10 @@ class Player {
         this.isInvincible = false;
         this.slowTimer = 0;
         this.rootTimer = 0;
+        this.comboStage = 0; this.comboStageTimer = 0; this.isComboAttacking = false; this.comboAttackTimer = 0;
+        this.isCharging = false; this.chargeTime = 0;
+        this.perfectDodgeActive = false; this.perfectDodgeTimer = 0; this.perfectDodgeBonus = false; this.perfectDodgeBonusTimer = 0; this.dodgeInvincibleTimer = 0;
+        this.skillBuff = null; this.skillBuffTimer = 0; this.skillBuffCount = 0;
     }
 
     heal(amount) { this.hp = Math.min(CONFIG.player.maxHp, this.hp + amount); }

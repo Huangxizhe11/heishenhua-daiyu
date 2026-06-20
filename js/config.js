@@ -80,6 +80,27 @@ const CONFIG = {
     }
 };
 
+// 战斗系统配置
+const COMBAT = {
+    comboWindow: 2,
+    comboDamageMultipliers: [1, 1.2, 1.5],
+    comboRanges: [3, 3.5, 4.5],
+    chargeMaxTime: 1.5,
+    chargeMinTime: 0.35,
+    chargeDamageMultiplier: 3,
+    chargeRangeMultiplier: 1.5,
+    perfectDodgeWindow: 0.3,
+    perfectDodgeBonus: 2,
+    mpPerHit: 5,
+    mpPerComboFinish: 10,
+    skillBuffDuration: 5,
+    tearBuffCount: 3,
+    tearBuffDamageMultiplier: 1.3,
+    ultimateBuffRangeMultiplier: 1.5,
+    charmBuffHealPerHit: 30,
+    charmBuffCount: 3,
+};
+
 // 技能配置
 const SKILLS = {
     normal: {

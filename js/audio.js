@@ -97,6 +97,33 @@ class AudioManager {
         setTimeout(() => this.playTone(440, 0.06, 'triangle', 0.12), 40);
     }
 
+    playAttackCombo2() {
+        this.playTone(440, 0.1, 'triangle', 0.18);
+        setTimeout(() => this.playTone(550, 0.08, 'triangle', 0.15), 50);
+        setTimeout(() => this.playTone(660, 0.06, 'triangle', 0.12), 100);
+    }
+
+    playAttackCombo3() {
+        this.playTone(330, 0.15, 'sawtooth', 0.2);
+        setTimeout(() => this.playTone(440, 0.12, 'sawtooth', 0.18), 60);
+        setTimeout(() => this.playTone(660, 0.1, 'sawtooth', 0.15), 120);
+        setTimeout(() => this.playTone(880, 0.08, 'sine', 0.12), 180);
+    }
+
+    playChargeStart() {
+        this.playTone(200, 0.2, 'sine', 0.1);
+    }
+
+    playChargeFull() {
+        this.playTone(880, 0.15, 'sine', 0.2);
+        setTimeout(() => this.playTone(1100, 0.2, 'sine', 0.15), 80);
+    }
+
+    playChargeRelease() {
+        this.playTone(330, 0.15, 'triangle', 0.2);
+        setTimeout(() => this.playTone(440, 0.12, 'triangle', 0.15), 60);
+    }
+
     playSkill() {
         this.playTone(330, 0.3, 'sine', 0.3);
         setTimeout(() => this.playTone(440, 0.2, 'sine', 0.2), 100);
