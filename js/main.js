@@ -182,7 +182,7 @@ class Game {
             if (this.isPaused) return;
             if (this.gameState === 'playing') {
                 if (!document.pointerLockElement) {
-                    // 指针锁不可用且已标记失败 → 降级运行
+                    this.keys = {};  // 指针锁丢失时清除按键残留
                     if (!this.pointerLockFailed) {
                         this.pause();
                     }
@@ -257,6 +257,7 @@ class Game {
 
     beginLevel() {
         document.getElementById('story-screen').style.display = 'none';
+        this.keys = {};  // 切换关卡时清除按键残留
         document.getElementById('hud').style.display = 'block';
         document.getElementById('controls').style.display = 'block';
         document.getElementById('controls').style.opacity = '1';
@@ -280,6 +281,7 @@ class Game {
         setTimeout(() => { this.player.isInvincible = false; }, 1500);
 
         const level = LEVELS[this.currentLevel];
+        console.log('beginLevel: currentLevel=' + this.currentLevel + ' bossType=' + level.boss.type + ' bossName=' + level.boss.name);
 
         // 重新配置BOSS模型（不同关卡不同BOSS类型）
         this.boss.reconfigure(level.boss);
@@ -809,6 +811,7 @@ class Game {
     gameOver() {
         this.gameState = 'gameover';
         this.isPaused = false;
+        this.keys = {};  // 清除按键残留
         audio.stopBGM();
         if (document.pointerLockElement) document.exitPointerLock();
         document.getElementById('hud').style.display = 'none';
@@ -826,6 +829,7 @@ class Game {
     pause() {
         if (this.gameState !== 'playing' || this.isPaused) return;
         this.isPaused = true;
+        this.keys = {};  // 清除按键残留
         if (document.pointerLockElement) document.exitPointerLock();
         document.getElementById('pause-screen').style.display = 'flex';
     }

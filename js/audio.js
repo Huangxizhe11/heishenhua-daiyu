@@ -69,9 +69,26 @@ class AudioManager {
             this.currentBGM = new Audio(src);
             this.currentBGM.loop = true;
             this.currentBGM.volume = 0.4;
-            this.currentBGM.play().catch(() => {});
-            this.bgmPlaying = true;
+            this.currentBGM.preload = 'auto';
+            const playPromise = this.currentBGM.play();
+            if (playPromise) {
+                playPromise.then(() => {
+                    this.bgmPlaying = true;
+                }).catch(() => {
+                    // 浏览器自动播放策略阻止，等用户交互后重试
+                    this._pendingBGM = theme;
+                });
+            }
         } catch(e) {}
+    }
+
+    // 用户交互后重试播放被阻止的BGM
+    retryBGM() {
+        if (this._pendingBGM) {
+            const theme = this._pendingBGM;
+            this._pendingBGM = null;
+            this.playBGM(theme);
+        }
     }
 
     // ===== 音效 =====

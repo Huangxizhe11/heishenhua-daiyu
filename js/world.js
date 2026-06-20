@@ -242,6 +242,56 @@ class World {
         this.scene.add(glow);
     }
 
+    // 阶段转换时动态调整环境
+    setPhaseEnvironment(bossType, phase) {
+        // 花瓣颜色变化
+        const petalColors = {
+            baochai: [0xffb6c1, 0xffd700, 0xff4444],
+            zhaoyiniang: [0xff6633, 0xff3300, 0xcc0000],
+            mirror: [0xcc99ff, 0x9944ff, 0xff44ff],
+        };
+        const petalColor = (petalColors[bossType] || petalColors.baochai)[phase] || 0xffb6c1;
+
+        this.petals.forEach(petal => {
+            if (petal.material) {
+                const targetColor = new THREE.Color(petalColor);
+                petal.material.color.lerp(targetColor, 0.5);
+                petal.userData.originalColor = petal.material.color.clone();
+                petal.userData._phaseColorTarget = targetColor;
+            }
+        });
+
+        // 地面网格颜色变化
+        const grid = this.scene.getObjectByName('grid');
+        if (grid && grid.material) {
+            const gridColors = {
+                baochai: [0x2a1a4e, 0x3a2a1e, 0x4a1a1a],
+                zhaoyiniang: [0x2a1a1a, 0x3a0a0a, 0x4a0000],
+                mirror: [0x1a1a4e, 0x2a0a5e, 0x3a0060],
+            };
+            const gc = (gridColors[bossType] || gridColors.baochai)[phase];
+            if (gc !== undefined) {
+                grid.material.color = new THREE.Color(gc);
+            }
+        }
+
+        // 月亮颜色变化
+        const moonColors = {
+            baochai: [0x4a4a8a, 0xff8800, 0xff2200],
+            zhaoyiniang: [0xff6633, 0xff2200, 0xff0000],
+            mirror: [0x9966ff, 0x7744dd, 0xff44ff],
+        };
+        const moon = this.scene.getObjectByName('moon');
+        const moonGlow = this.scene.getObjectByName('moonGlow');
+        const moonColor = (moonColors[bossType] || moonColors.baochai)[phase];
+        if (moon && moonColor !== undefined) {
+            moon.material.color.set(moonColor);
+        }
+        if (moonGlow && moonColor !== undefined) {
+            moonGlow.material.color.set(moonColor);
+        }
+    }
+
     update(delta) {
         this.petals.forEach(petal => {
             const ud = petal.userData;
@@ -253,6 +303,11 @@ class World {
             petal.rotation.x += delta * ud.rotationSpeed;
             petal.rotation.z += delta * ud.rotationSpeed * 0.5;
             petal.rotation.y += delta * ud.rotationSpeed * 0.3;
+
+            // 阶段花瓣颜色渐变（缓慢趋向目标颜色）
+            if (ud._phaseColorTarget) {
+                petal.material.color.lerp(ud._phaseColorTarget, delta * 0.3);
+            }
 
             ud.colorTimer += delta;
             if (ud.colorTimer > ud.colorDuration) {

@@ -32,12 +32,12 @@ const LEVELS = [
             peonyBloomRange: 5,
             reflectChance: 0.25,      // 金锁护体：概率弹反玩家普攻（阶段2+）
             phases: [
-                { hpThreshold: 1.0, pattern: 'normal' },
-                { hpThreshold: 0.6, pattern: 'enraged' },
-                { hpThreshold: 0.3, pattern: 'desperate' }
+                { hpThreshold: 1.0, pattern: 'normal', damageResistance: 0, weaknessMultiplier: 1 },
+                { hpThreshold: 0.6, pattern: 'enraged', damageResistance: 0.15, weaknessMultiplier: 1.1 },
+                { hpThreshold: 0.3, pattern: 'desperate', damageResistance: 0.25, weaknessMultiplier: 1.3 }
             ],
             phaseNames: ['冷香初绽 · 金锁护体', '牡丹怒放 · 冷酷无情', '金锁将碎 · 玉石俱焚'],
-            phaseDialogues: ['金锁有灵，岂容你放肆！', '既然执迷不悟，便让你见识宝钗之怒！', '玉石俱焚，也在所不惜！'],
+            phaseDialogues: ['金锁有灵，岂容你放肆！', '牡丹花开，冷香彻骨——你该退下了！', '金锁将碎……玉石俱焚，也在所不惜！'],
             projectileBaseDmg: 80,
         },
         world: {
@@ -95,12 +95,12 @@ const LEVELS = [
             fireBreathRange: 7,
             curseDmg: 100,            // 魇魔诅咒弹：暗紫追踪弹
             phases: [
-                { hpThreshold: 1.0, pattern: 'normal' },
-                { hpThreshold: 0.5, pattern: 'enraged' },
-                { hpThreshold: 0.2, pattern: 'desperate' }
+                { hpThreshold: 1.0, pattern: 'normal', damageResistance: 0, weaknessMultiplier: 1 },
+                { hpThreshold: 0.5, pattern: 'enraged', damageResistance: 0.1, weaknessMultiplier: 1.15 },
+                { hpThreshold: 0.2, pattern: 'desperate', damageResistance: 0.2, weaknessMultiplier: 1.35 }
             ],
             phaseNames: ['妒火初燃 · 魇魔初现', '烈焰焚心 · 纸人漫天', '灰飞烟灭 · 同归于尽'],
-            phaseDialogues: ['你们都该死！', '嫉妒之火，焚尽一切！', '同归于尽吧！'],
+            phaseDialogues: ['你们都该死！都是你们害的！', '嫉妒之火，焚尽一切！纸人听令！', '哈哈哈——同归于尽吧！都别想活！'],
             projectileBaseDmg: 100,
         },
         world: {
@@ -158,12 +158,12 @@ const LEVELS = [
             shatterDmg: 260,          // 幻境碎裂：大范围镜片爆裂（阶段3终极）
             shatterRange: 9,
             phases: [
-                { hpThreshold: 1.0, pattern: 'normal' },
-                { hpThreshold: 0.5, pattern: 'enraged' },
-                { hpThreshold: 0.25, pattern: 'desperate' }
+                { hpThreshold: 1.0, pattern: 'normal', damageResistance: 0, weaknessMultiplier: 1 },
+                { hpThreshold: 0.5, pattern: 'enraged', damageResistance: 0.2, weaknessMultiplier: 1.2 },
+                { hpThreshold: 0.25, pattern: 'desperate', damageResistance: 0.3, weaknessMultiplier: 1.4 }
             ],
             phaseNames: ['镜花水月 · 幻境初显', '幻境崩塌 · 镜像分身', '心魔显形 · 万镜碎裂'],
-            phaseDialogues: ['你看清自己了吗？', '幻境破碎，无处可逃！', '你最恐惧的，就是你自己！'],
+            phaseDialogues: ['你看清自己了吗？这只是开始……', '幻境破碎，镜像分身——你无处可逃！', '你最恐惧的，就是你自己！万镜碎裂！'],
             projectileBaseDmg: 120,
         },
         world: {

@@ -25,6 +25,7 @@ class Boss {
         this._animTime = 0;
         this._teleportCooldown = 0;
         this._zigzagTimer = 0;
+        this._zigzagAngle = 0;
         this._zigzagDir = 1;
         this._fireTrailTimer = 0;     // 赵姨娘火焰拖尾计时
         this._mirrorCloneTimer = 0;   // 镜中魔分身计时
@@ -60,6 +61,7 @@ class Boss {
         this._animTime = 0;
         this._teleportCooldown = 0;
         this._zigzagTimer = 0;
+        this._zigzagAngle = 0;
         this._fireTrailTimer = 0;
         this._mirrorCloneTimer = 0;
         this._mirrorClones = [];
@@ -950,15 +952,15 @@ class Boss {
                     if (!this._zigzagTimer || this._zigzagTimer <= 0) {
                         this._zigzagDir = Math.random() < 0.5 ? 1 : -1;
                         this._zigzagTimer = 0.4 + Math.random() * 0.6;
+                        this._zigzagAngle = this._zigzagDir * (0.3 + Math.random() * 0.4);
                     }
                     this._zigzagTimer -= delta;
                     const sideDir = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
-                    const zigAngle = this._zigzagDir * (0.5 + Math.random() * 0.3);
                     const moveDir = new THREE.Vector3(
-                        toPlayer.x * Math.cos(zigAngle) + sideDir.x * Math.sin(zigAngle),
+                        toPlayer.x * Math.cos(this._zigzagAngle) + sideDir.x * Math.sin(this._zigzagAngle),
                         0,
-                        toPlayer.z * Math.cos(zigAngle) + sideDir.z * Math.sin(zigAngle)
-                    );
+                        toPlayer.z * Math.cos(this._zigzagAngle) + sideDir.z * Math.sin(this._zigzagAngle)
+                    ).normalize();
                     if (dist > 3) {
                         this.position.x += moveDir.x * erraticSpeed * delta;
                         this.position.z += moveDir.z * erraticSpeed * delta;
@@ -969,15 +971,15 @@ class Boss {
                     if (!this._zigzagTimer || this._zigzagTimer <= 0) {
                         this._zigzagDir = Math.random() < 0.5 ? 1 : -1;
                         this._zigzagTimer = 0.2 + Math.random() * 0.4;
+                        this._zigzagAngle = this._zigzagDir * (0.4 + Math.random() * 0.5);
                     }
                     this._zigzagTimer -= delta;
                     const sideDir = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
-                    const zigAngle = this._zigzagDir * (0.7 + Math.random() * 0.5);
                     const moveDir = new THREE.Vector3(
-                        toPlayer.x * Math.cos(zigAngle) + sideDir.x * Math.sin(zigAngle),
+                        toPlayer.x * Math.cos(this._zigzagAngle) + sideDir.x * Math.sin(this._zigzagAngle),
                         0,
-                        toPlayer.z * Math.cos(zigAngle) + sideDir.z * Math.sin(zigAngle)
-                    );
+                        toPlayer.z * Math.cos(this._zigzagAngle) + sideDir.z * Math.sin(this._zigzagAngle)
+                    ).normalize();
                     this.position.x += moveDir.x * erraticSpeed * delta;
                     this.position.z += moveDir.z * erraticSpeed * delta;
                 } else {
@@ -986,16 +988,19 @@ class Boss {
                     if (!this._zigzagTimer || this._zigzagTimer <= 0) {
                         this._zigzagDir = Math.random() < 0.5 ? 1 : -1;
                         this._zigzagTimer = 0.15 + Math.random() * 0.2;
+                        this._zigzagAngle = this._zigzagDir * (0.2 + Math.random() * 0.3);
                     }
                     this._zigzagTimer -= delta;
-                    if (dist > 2.5) {
-                        this.position.x += toPlayer.x * berserkSpeed * delta;
-                        this.position.z += toPlayer.z * berserkSpeed * delta;
-                    }
-                    // 极速侧移
                     const sideDir = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
-                    this.position.x += sideDir.x * this._zigzagDir * berserkSpeed * 0.4 * delta;
-                    this.position.z += sideDir.z * this._zigzagDir * berserkSpeed * 0.4 * delta;
+                    const moveDir = new THREE.Vector3(
+                        toPlayer.x * Math.cos(this._zigzagAngle) + sideDir.x * Math.sin(this._zigzagAngle),
+                        0,
+                        toPlayer.z * Math.cos(this._zigzagAngle) + sideDir.z * Math.sin(this._zigzagAngle)
+                    ).normalize();
+                    if (dist > 2.5) {
+                        this.position.x += moveDir.x * berserkSpeed * delta;
+                        this.position.z += moveDir.z * berserkSpeed * delta;
+                    }
                 }
             }
             // 镜中魔：不行走，纯瞬移（teleportStrikeAttack 处理）
@@ -1462,7 +1467,7 @@ class Boss {
     }
 
     coldBreathAttack(playerPosition) {
-        this.attackCooldown = 2.2 - this.phase * 0.3;
+        this.attackCooldown = [2.2, 1.6, 1.0][this.phase] || 2.2;
         audio.playColdBreath();
 
         const dir = new THREE.Vector3().subVectors(playerPosition, this.position);
@@ -1480,7 +1485,7 @@ class Boss {
 
     peonyBloomAttack() {
         this.isAttacking = true;
-        this.attackCooldown = 3 - this.phase * 0.4;
+        this.attackCooldown = [3.0, 2.2, 1.4][this.phase] || 3.0;
         audio.playPeonyBloom();
 
         this.createGroundWarning(this.position.clone(), this.config.peonyBloomRange);
@@ -1507,7 +1512,7 @@ class Boss {
     chargeAttack(playerPosition) {
         if (this.isCharging) return null;
         this.isCharging = true;
-        this.attackCooldown = 3 - this.phase * 0.5;
+        this.attackCooldown = [3.0, 2.2, 1.5][this.phase] || 3.0;
         this.chargeDir = new THREE.Vector3().subVectors(playerPosition, this.position);
         this.chargeDir.y = 0;
         this.chargeDir.normalize();
@@ -1523,22 +1528,53 @@ class Boss {
         const distance = this.position.distanceTo(playerPosition);
         const r = Math.random();
 
-        if (distance < 4) {
-            if (r < 0.5) return this.meleeAttack();
-            if (r < 0.8) return this.fireBreathAttack(playerPosition);
-            return this.summonPaperDolls(playerPosition);
-        } else if (distance < 10) {
-            if (r < 0.35) return this.summonPaperDolls(playerPosition);
-            if (r < 0.7) return this.fireBreathAttack(playerPosition);
-            return this.curseAttack(playerPosition);
+        if (this.phase === 0) {
+            // 妒火初燃：中距离作战，偶尔召唤纸人
+            if (distance < 4) {
+                if (r < 0.5) return this.meleeAttack();
+                if (r < 0.8) return this.fireBreathAttack(playerPosition);
+                return this.summonPaperDolls(playerPosition);
+            } else if (distance < 10) {
+                if (r < 0.35) return this.summonPaperDolls(playerPosition);
+                if (r < 0.7) return this.fireBreathAttack(playerPosition);
+                return this.curseAttack(playerPosition);
+            } else {
+                if (r < 0.6) return this.summonPaperDolls(playerPosition);
+                return this.curseAttack(playerPosition);
+            }
+        } else if (this.phase === 1) {
+            // 烈焰焚心：纸人数量翻倍，火焰更频繁
+            if (distance < 5) {
+                if (r < 0.35) return this.meleeAttack();
+                if (r < 0.65) return this.fireBreathAttack(playerPosition);
+                return this.summonPaperDolls(playerPosition);
+            } else {
+                if (r < 0.3) return this.summonPaperDolls(playerPosition);
+                if (r < 0.55) return this.fireBreathAttack(playerPosition);
+                if (r < 0.8) return this.curseAttack(playerPosition);
+                // 连续双诅咒
+                this.curseAttack(playerPosition);
+                return this.curseAttack(playerPosition);
+            }
         } else {
-            if (r < 0.6) return this.summonPaperDolls(playerPosition);
-            return this.curseAttack(playerPosition);
+            // 灰飞烟灭：疯狂连招，纸人漫天+火焰+诅咒全开
+            if (distance < 5) {
+                if (r < 0.25) return this.meleeAttack();
+                if (r < 0.5) return this.fireBreathAttack(playerPosition);
+                if (r < 0.75) return this.summonPaperDolls(playerPosition);
+                return this.chargeAttack(playerPosition);
+            } else {
+                // 远距离也疯狂输出
+                this.summonPaperDolls(playerPosition);
+                if (r < 0.4) return this.fireBreathAttack(playerPosition);
+                if (r < 0.7) return this.curseAttack(playerPosition);
+                return this.chargeAttack(playerPosition);
+            }
         }
     }
 
     summonPaperDolls(playerPosition) {
-        this.attackCooldown = 2.5 - this.phase * 0.4;
+        this.attackCooldown = [2.5, 1.8, 1.2][this.phase] || 2.5;
         audio.playPaperSummon();
 
         const count = this.config.paperDollCount + this.phase;
@@ -1559,7 +1595,7 @@ class Boss {
 
     fireBreathAttack(playerPosition) {
         this.isAttacking = true;
-        this.attackCooldown = 2.8 - this.phase * 0.4;
+        this.attackCooldown = [2.8, 2.0, 1.3][this.phase] || 2.8;
         audio.playFireAttack();
 
         const dir = new THREE.Vector3().subVectors(playerPosition, this.position);
@@ -1589,7 +1625,7 @@ class Boss {
     }
 
     curseAttack(playerPosition) {
-        this.attackCooldown = 2 - this.phase * 0.3;
+        this.attackCooldown = [2.0, 1.5, 0.9][this.phase] || 2.0;
         audio.playBossProjectile();
 
         const dir = new THREE.Vector3().subVectors(playerPosition, this.position);
@@ -1609,28 +1645,59 @@ class Boss {
         const distance = this.position.distanceTo(playerPosition);
         const r = Math.random();
 
-        // 阶段3有概率释放幻境碎裂（终极）
-        if (this.phase >= 2 && r < 0.18 && this.attackCooldown <= 0) {
-            return this.shatterAttack();
-        }
-
-        if (distance < 4) {
-            if (r < 0.5) return this.meleeAttack();
-            if (r < 0.85) return this.teleportStrikeAttack(playerPosition);
-            return this.mirrorBarrageAttack();
-        } else if (distance < 12) {
-            if (r < 0.4) return this.mirrorBarrageAttack();
-            if (r < 0.75) return this.teleportStrikeAttack(playerPosition);
-            return this.meleeAttack();
+        if (this.phase === 0) {
+            // 幻境初显：以弹幕为主，偶尔瞬移
+            if (distance < 4) {
+                if (r < 0.4) return this.meleeAttack();
+                if (r < 0.7) return this.teleportStrikeAttack(playerPosition);
+                return this.mirrorBarrageAttack();
+            } else if (distance < 12) {
+                if (r < 0.5) return this.mirrorBarrageAttack();
+                if (r < 0.8) return this.teleportStrikeAttack(playerPosition);
+                return this.meleeAttack();
+            } else {
+                if (r < 0.7) return this.mirrorBarrageAttack();
+                return this.teleportStrikeAttack(playerPosition);
+            }
+        } else if (this.phase === 1) {
+            // 幻境崩塌：频繁瞬移+弹幕，分身干扰
+            if (distance < 5) {
+                if (r < 0.3) return this.meleeAttack();
+                if (r < 0.6) return this.teleportStrikeAttack(playerPosition);
+                return this.mirrorBarrageAttack();
+            } else {
+                if (r < 0.35) return this.mirrorBarrageAttack();
+                if (r < 0.65) return this.teleportStrikeAttack(playerPosition);
+                if (r < 0.85) return this.mirrorBarrageAttack();
+                return this.curseAttack(playerPosition);
+            }
         } else {
-            if (r < 0.7) return this.mirrorBarrageAttack();
-            return this.teleportStrikeAttack(playerPosition);
+            // 心魔显形：终极连招，弹幕+瞬移+碎裂全开
+            if (r < 0.15 && this.attackCooldown <= 0) {
+                return this.shatterAttack();
+            }
+            if (distance < 5) {
+                if (r < 0.25) return this.meleeAttack();
+                if (r < 0.5) return this.teleportStrikeAttack(playerPosition);
+                if (r < 0.75) return this.mirrorBarrageAttack();
+                return this.shatterAttack();
+            } else {
+                // 远距离疯狂弹幕+瞬移
+                if (r < 0.3) return this.mirrorBarrageAttack();
+                if (r < 0.55) return this.teleportStrikeAttack(playerPosition);
+                if (r < 0.8) {
+                    // 双弹幕
+                    this.mirrorBarrageAttack();
+                    return this.mirrorBarrageAttack();
+                }
+                return this.shatterAttack();
+            }
         }
     }
 
     mirrorBarrageAttack() {
         this.isAttacking = true;
-        this.attackCooldown = 2.5 - this.phase * 0.4;
+        this.attackCooldown = [2.5, 1.8, 1.0][this.phase] || 2.5;
         audio.playMirrorShatter();
 
         const count = this.config.mirrorBarrageCount + this.phase * 2;
@@ -1646,8 +1713,8 @@ class Boss {
 
     teleportStrikeAttack(playerPosition) {
         if (this._teleportCooldown > 0) return this.mirrorBarrageAttack();
-        this._teleportCooldown = 4 - this.phase * 0.8;
-        this.attackCooldown = 2 - this.phase * 0.3;
+        this._teleportCooldown = [4.0, 2.5, 1.5][this.phase] || 4.0;
+        this.attackCooldown = [2.0, 1.5, 0.8][this.phase] || 2.0;
         audio.playMirrorShatter();
 
         // 瞬移前在原位留下镜片爆裂
@@ -1703,7 +1770,8 @@ class Boss {
 
     takeDamage(damage) {
         if (this.hp <= 0) return false;
-        this.hp -= damage;
+        const resistedDamage = damage * (1 - this.damageResistance) * this.weaknessMultiplier;
+        this.hp -= resistedDamage;
 
         if (Math.random() < 0.2 && !this.isCharging && !this.isStunned) {
             const jumpDir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.mesh.quaternion);

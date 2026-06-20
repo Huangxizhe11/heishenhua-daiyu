@@ -616,6 +616,8 @@ class VFXManager {
 
     createPhaseRing(position, color) {
         const ringColor = color || CONFIG.colors.accent;
+
+        // 三层扩散环
         for (let i = 0; i < 3; i++) {
             const ringGeo = new THREE.TorusGeometry(0.5 + i * 0.8, 0.15, 8, 32);
             const ringMat = new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: 0.8 - i * 0.2 });
@@ -628,8 +630,8 @@ class VFXManager {
             const delay = i * 150;
             setTimeout(() => {
                 const expandRing = () => {
-                    ring.scale.multiplyScalar(1.04);
-                    ring.material.opacity -= 0.015;
+                    ring.scale.multiplyScalar(1.06);
+                    ring.material.opacity -= 0.012;
                     if (ring.material.opacity > 0) {
                         requestAnimationFrame(expandRing);
                     } else {
@@ -640,16 +642,155 @@ class VFXManager {
             }, delay);
         }
 
-        for (let i = 0; i < 40; i++) {
+        // 大量粒子爆发
+        for (let i = 0; i < 60; i++) {
             const angle = Math.random() * Math.PI * 2;
             const r = Math.random() * 2;
             const particle = this.createParticle(
                 position.clone().add(new THREE.Vector3(Math.cos(angle) * r, 0.5 + Math.random() * 2, Math.sin(angle) * r)),
-                ringColor, 0.3
+                ringColor, 0.35
             );
-            particle.velocity = new THREE.Vector3(Math.cos(angle) * 8, 3 + Math.random() * 5, Math.sin(angle) * 8);
-            particle.life = 1.5;
+            particle.velocity = new THREE.Vector3(Math.cos(angle) * 10, 4 + Math.random() * 6, Math.sin(angle) * 10);
+            particle.life = 1.8;
             this.particles.push(particle);
+        }
+
+        // 地面冲击波
+        const shockGeo = new THREE.RingGeometry(0.5, 1.5, 32);
+        const shockMat = new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
+        const shock = new THREE.Mesh(shockGeo, shockMat);
+        shock.position.set(position.x, 0.15, position.z);
+        shock.rotation.x = -Math.PI / 2;
+        this.scene.add(shock);
+        const expandShock = () => {
+            shock.scale.multiplyScalar(1.08);
+            shock.material.opacity -= 0.02;
+            if (shock.material.opacity > 0) requestAnimationFrame(expandShock);
+            else this.scene.remove(shock);
+        };
+        expandShock();
+
+        // 垂直光柱
+        const pillarGeo = new THREE.CylinderGeometry(0.3, 0.3, 10, 8);
+        const pillarMat = new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: 0.5 });
+        const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+        pillar.position.copy(position);
+        pillar.position.y += 5;
+        this.scene.add(pillar);
+        const fadePillar = () => {
+            pillar.material.opacity -= 0.02;
+            pillar.scale.y *= 1.02;
+            if (pillar.material.opacity > 0) requestAnimationFrame(fadePillar);
+            else this.scene.remove(pillar);
+        };
+        fadePillar();
+    }
+
+    // 阶段转换专属特效（比普通phaseRing更华丽）
+    createPhaseTransitionEffect(position, bossType, phase) {
+        const colors = {
+            baochai: [0xffd700, 0xff8800, 0xff2200],
+            zhaoyiniang: [0xff4400, 0xff2200, 0xff0000],
+            mirror: [0x9932cc, 0x7700aa, 0xff44ff],
+        };
+        const color = (colors[bossType] || colors.baochai)[phase] || 0xffd700;
+
+        // BOSS类型专属特效
+        if (bossType === 'baochai') {
+            // 宝钗：金锁碎片飞散 + 冰晶爆发
+            for (let i = 0; i < 30; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 5 + Math.random() * 8;
+                const shard = this.createParticle(
+                    position.clone().add(new THREE.Vector3(0, 1 + Math.random() * 2, 0)),
+                    phase === 2 ? 0xff2200 : 0xffd700, 0.2 + Math.random() * 0.2
+                );
+                shard.velocity = new THREE.Vector3(Math.cos(angle) * speed, 3 + Math.random() * 5, Math.sin(angle) * speed);
+                shard.life = 1.5;
+                shard.rotationSpeed = (Math.random() - 0.5) * 8;
+                this.particles.push(shard);
+            }
+            // 冰晶环
+            if (phase >= 1) {
+                for (let i = 0; i < 20; i++) {
+                    const angle = (i / 20) * Math.PI * 2;
+                    const ice = this.createParticle(
+                        position.clone().add(new THREE.Vector3(Math.cos(angle) * 2, 1, Math.sin(angle) * 2)),
+                        0x88ccff, 0.25
+                    );
+                    ice.velocity = new THREE.Vector3(Math.cos(angle) * 3, 2, Math.sin(angle) * 3);
+                    ice.life = 1.2;
+                    this.particles.push(ice);
+                }
+            }
+        } else if (bossType === 'zhaoyiniang') {
+            // 赵姨娘：火焰风暴 + 纸人飞散
+            for (let i = 0; i < 40; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 4 + Math.random() * 10;
+                const fireColors = [0xff4400, 0xff8800, 0xffaa00, 0xcc2200];
+                const fire = this.createParticle(
+                    position.clone().add(new THREE.Vector3(0, 0.5 + Math.random() * 2, 0)),
+                    fireColors[Math.floor(Math.random() * fireColors.length)], 0.3 + Math.random() * 0.3
+                );
+                fire.velocity = new THREE.Vector3(Math.cos(angle) * speed, 2 + Math.random() * 6, Math.sin(angle) * speed);
+                fire.life = 1.5;
+                this.particles.push(fire);
+            }
+            // 纸人飞散
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2;
+                const doll = this.createPetal(
+                    position.clone().add(new THREE.Vector3(Math.cos(angle) * 1.5, 1.5, Math.sin(angle) * 1.5)),
+                    0xeeeeee
+                );
+                doll.velocity = new THREE.Vector3(Math.cos(angle) * 6, 3 + Math.random() * 3, Math.sin(angle) * 6);
+                doll.life = 2;
+                this.particles.push(doll);
+            }
+        } else if (bossType === 'mirror') {
+            // 镜中魔：镜片碎裂 + 空间扭曲环
+            for (let i = 0; i < 50; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const elev = (Math.random() - 0.3) * Math.PI;
+                const speed = 6 + Math.random() * 10;
+                const shardGeo = new THREE.OctahedronGeometry(0.1 + Math.random() * 0.2, 0);
+                const shardMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9 });
+                const shard = new THREE.Mesh(shardGeo, shardMat);
+                shard.position.copy(position);
+                shard.position.y += 1;
+                this.scene.add(shard);
+                this.particles.push({
+                    mesh: shard,
+                    velocity: new THREE.Vector3(Math.cos(angle) * Math.cos(elev) * speed, Math.sin(elev) * speed, Math.sin(angle) * Math.cos(elev) * speed),
+                    life: 1.5,
+                    decay: 1.2,
+                    rotationSpeed: (Math.random() - 0.5) * 12
+                });
+            }
+            // 空间扭曲环（多个交叉旋转的环）
+            for (let i = 0; i < 3; i++) {
+                const twistGeo = new THREE.TorusGeometry(2 + i * 0.5, 0.08, 6, 24);
+                const twistMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.6 });
+                const twist = new THREE.Mesh(twistGeo, twistMat);
+                twist.position.copy(position);
+                twist.position.y += 1.5;
+                twist.rotation.x = Math.PI / 2 + i * 0.5;
+                twist.rotation.z = i * 0.7;
+                this.scene.add(twist);
+                const startTime = Date.now();
+                const dur = 1500;
+                const animTwist = () => {
+                    const t = (Date.now() - startTime) / dur;
+                    if (t >= 1) { this.scene.remove(twist); return; }
+                    twist.rotation.y += 0.08;
+                    twist.rotation.x += 0.03;
+                    twist.scale.multiplyScalar(1.02);
+                    twist.material.opacity = 0.6 * (1 - t);
+                    requestAnimationFrame(animTwist);
+                };
+                animTwist();
+            }
         }
     }
 
