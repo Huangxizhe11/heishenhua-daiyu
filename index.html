@@ -350,6 +350,7 @@
             <button id="start-btn" class="menu-btn">开始游戏</button>
             <button id="level-select-btn" class="menu-btn">关卡选择</button>
             <button id="controls-btn" class="menu-btn">操作说明</button>
+            <button id="changelog-btn" class="menu-btn">更新日志</button>
             <button id="credits-btn" class="menu-btn">制作信息</button>
         </div>
     </div>
@@ -389,6 +390,12 @@
             <div class="control-row"><span class="key">ESC</span><span>暂停</span></div>
         </div>
         <button id="controls-back" class="menu-btn" style="margin-top:30px;">返 回</button>
+    </div>
+
+    <div id="changelog-screen" class="overlay-screen" style="display:none;">
+        <h2>更新日志</h2>
+        <div id="changelog-content" style="max-height:60vh; overflow-y:auto; text-align:left; padding:0 30px; line-height:2;"></div>
+        <button id="changelog-back" class="menu-btn" style="margin-top:25px;">返 回</button>
     </div>
 
     <div id="credits-screen" class="overlay-screen" style="display:none;">
@@ -512,6 +519,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="changelog.js"></script>
     <script src="js/config.js"></script>
     <script src="js/levels.js"></script>
     <script src="js/audio.js"></script>
