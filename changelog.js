@@ -1,55 +1,111 @@
-// changelog.js - 更新日志
+// changelog.js - 从 git log 自动生成
 const CHANGELOG = [
     {
-        version: 'v0.5',
-        date: '2026-06-20',
-        title: '战斗系统三步升级',
-        items: [
-            '【战斗系统】三段式连招：横扫→上挑→花瓣爆发',
-            '【战斗系统】蓄力攻击：长按左键0.35秒触发，最高300%伤害',
-            '【战斗系统】完美闪避：翻滚后0.3秒内被攻击触发时停+双倍伤害',
-            '【战斗系统】技能联动：泪雨后泪滴/天魁星后范围扩大/颦颦一笑后回血',
-            '【BOSS阶段】血条分段显示+阶段名称+血条颜色变化',
-            '【BOSS阶段】场景随阶段变换（花瓣/地面/月亮颜色渐变）',
-            '【场景交互】薛宝钗：金锁柱（摧毁全部→BOSS虚弱5秒）',
-            '【场景交互】赵姨娘：妒火祭坛（靠近引爆→500伤害+灼烧）',
-            '【场景交互】镜中魔：镜面碎片（踩到→攻击范围+50%buff）',
-            '【修复】关卡选择BOSS不切换问题',
-            '【修复】返回主界面按钮事件冒泡问题',
-            '【修复】Pointer lock降级后无法恢复问题',
-        ]
+        hash: '182e0e1',
+        date: '2026-06-21',
+        title: 'feat: 更新日志系统 - 主界面可查看历史更新内容',
+        stats: ' 3 files changed, 87 insertions(+)',
     },
     {
-        version: 'v0.4',
-        date: '2026-06-20',
-        title: '三BOSS差异化重设计',
-        items: [
-            '三个BOSS完全重做：薛宝钗(金锁防御)、赵姨娘(妒火召唤)、镜中魔(幻术瞬移)',
-            '关卡选择功能上线',
-            '返回主界面按钮',
-            '阶段转换系统：每个BOSS三个阶段，攻击模式递进',
-        ]
+        hash: '9ac4c22',
+        date: '2026-06-21',
+        title: 'feat: BOSS阶段视觉 + 场景交互机制(金锁柱/妒火祭坛/镜面碎片) + 修复NaN/pointer lock',
+        stats: ' 4 files changed, 325 insertions(+), 7 deletions(-)',
     },
     {
-        version: 'v0.3',
-        date: '2026-06-20',
-        title: '视觉与音效升级',
-        items: [
-            'MiniMax真实BGM',
-            '黑神话风格UI布局',
-            '模型全面重做+走路呼吸动画',
-            '剑气视觉重做',
-        ]
+        hash: '3ae9db0',
+        date: '2026-06-21',
+        title: 'feat: 战斗系统增强 - 三段连招+蓄力攻击+完美闪避+技能联动',
+        stats: ' 141 files changed, 28789 insertions(+), 29 deletions(-)',
     },
     {
-        version: 'v0.2',
+        hash: 'b2e814f',
         date: '2026-06-20',
-        title: '3关完整Demo',
-        items: [
-            '三关完整流程',
-            '视觉改进',
-            '战斗手感优化',
-            'Boss AI改进',
-        ]
+        title: 'fix: 添加favicon链接标签，修复GitHub Pages 404',
+        stats: ' 1 file changed, 1 insertion(+)',
+    },
+    {
+        hash: '5089e0c',
+        date: '2026-06-20',
+        title: 'feat: 三BOSS阶段性战斗系统 + 按键残留修复 + 音频优化',
+        stats: ' 6 files changed, 355 insertions(+), 70 deletions(-)',
+    },
+    {
+        hash: '503817e',
+        date: '2026-06-20',
+        title: 'fix: 彻底去掉提示弹窗 + beginLevel reconfigure补回',
+        stats: ' 1 file changed, 126 insertions(+), 22 deletions(-)',
+    },
+    {
+        hash: 'a5ca1d9',
+        date: '2026-06-20',
+        title: 'feat: 第三关BGM重做 - 唢呐二胡太鼓 黑神话红楼梦风格',
+        stats: ' 5 files changed, 385 insertions(+), 106 deletions(-)',
+    },
+    {
+        hash: '80f6dc1',
+        date: '2026-06-20',
+        title: 'Revert "fix: 关卡选择BOSS正确切换 + 返回主界面按钮修复 + 去掉提示弹窗"',
+        stats: ' 1 file changed, 10 insertions(+), 23 deletions(-)',
+    },
+    {
+        hash: '64973fa',
+        date: '2026-06-20',
+        title: 'fix: 关卡选择BOSS正确切换 + 返回主界面按钮修复 + 去掉提示弹窗',
+        stats: ' 1 file changed, 23 insertions(+), 10 deletions(-)',
+    },
+    {
+        hash: 'e9a5c8d',
+        date: '2026-06-20',
+        title: 'feat: 三BOSS差异化重设计 + 关卡流转修复 + 返回主界面按钮',
+        stats: ' 8 files changed, 1889 insertions(+), 346 deletions(-)',
+    },
+    {
+        hash: '9f47cf4',
+        date: '2026-06-20',
+        title: 'cleanup: 移除多余脚本，BGM用MiniMax MP3，SFX用WebAudio',
+        stats: ' 1 file changed, 126 deletions(-)',
+    },
+    {
+        hash: 'd2f60ff',
+        date: '2026-06-20',
+        title: 'fix: BGM连续性+音效降低+剑气视觉重做',
+        stats: ' 3 files changed, 77 insertions(+), 35 deletions(-)',
+    },
+    {
+        hash: '7beaea6',
+        date: '2026-06-20',
+        title: 'v6: MiniMax真实BGM + UI布局优化(黑神话风格)',
+        stats: ' 9 files changed, 162 insertions(+), 78 deletions(-)',
+    },
+    {
+        hash: 'a655a56',
+        date: '2026-06-20',
+        title: 'v5: 模型重做+BGM修复+移动方向修复+呼吸动画',
+        stats: ' 2 files changed, 3 insertions(+), 3 deletions(-)',
+    },
+    {
+        hash: '19071dd',
+        date: '2026-06-20',
+        title: 'v4: 角色模型全面重做+走路呼吸动画+BGM修复',
+        stats: ' 2 files changed, 428 insertions(+), 93 deletions(-)',
+    },
+    {
+        hash: '4175107',
+        date: '2026-06-20',
+        title: 'fix: BGM初始化顺序 + .gitignore清理',
+        stats: ' 1 file changed, 1 insertion(+)',
+    },
+    {
+        hash: 'bd59b74',
+        date: '2026-06-20',
+        title: 'v3: 战斗手感+Boss AI+视觉改进+清理测试文件',
+        stats: ' 1815 files changed, 6 insertions(+), 431655 deletions(-)',
+    },
+    {
+        hash: '32402c8',
+        date: '2026-06-20',
+        title: '黑神话·林黛玉 v2 - 3关完整Demo + 视觉改进',
+        stats: '',
     },
 ];

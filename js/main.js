@@ -1241,15 +1241,13 @@ class Game {
         const container = document.getElementById('changelog-content');
         if (!container || typeof CHANGELOG === 'undefined') return;
         container.innerHTML = CHANGELOG.map(log => `
-            <div style="margin-bottom:20px; padding:15px; border:1px solid rgba(233,69,96,0.2); border-radius:10px; background:rgba(0,0,0,0.3);">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <span style="color:#e94560; font-size:1.2rem; font-weight:bold;">${log.version}</span>
-                    <span style="color:#666; font-size:0.85rem;">${log.date}</span>
+            <div style="margin-bottom:15px; padding:12px 15px; border:1px solid rgba(233,69,96,0.2); border-radius:10px; background:rgba(0,0,0,0.3);">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="color:#e94560; font-size:0.9rem; font-weight:bold; font-family:monospace;">${log.hash}</span>
+                    <span style="color:#666; font-size:0.8rem;">${log.date}</span>
                 </div>
-                <div style="color:#ffd93d; font-size:1rem; margin-bottom:8px; letter-spacing:2px;">${log.title}</div>
-                <ul style="list-style:none; padding:0; margin:0;">
-                    ${log.items.map(item => `<li style="color:#ccc; font-size:0.85rem; padding:3px 0; padding-left:15px; position:relative;"><span style="position:absolute; left:0; color:#e94560;">·</span>${item}</li>`).join('')}
-                </ul>
+                <div style="color:#ffd93d; font-size:0.95rem; margin-top:5px; letter-spacing:1px;">${log.title}</div>
+                ${log.stats ? `<div style="color:#888; font-size:0.75rem; margin-top:3px;">${log.stats}</div>` : ''}
             </div>
         `).join('');
     }
