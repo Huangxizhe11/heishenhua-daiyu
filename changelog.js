@@ -1,6 +1,18 @@
 // changelog.js - 从 git log 自动生成
 const CHANGELOG = [
     {
+        hash: 'dd10afd',
+        date: '2026-06-21',
+        title: 'feat: 添加start.sh启动脚本（自动更新日志）',
+        stats: ' 1 file changed, 5 insertions(+)',
+    },
+    {
+        hash: '0257bd8',
+        date: '2026-06-21',
+        title: 'feat: 更新日志改为自动从git log生成',
+        stats: ' 3 files changed, 139 insertions(+), 59 deletions(-)',
+    },
+    {
         hash: '182e0e1',
         date: '2026-06-21',
         title: 'feat: 更新日志系统 - 主界面可查看历史更新内容',

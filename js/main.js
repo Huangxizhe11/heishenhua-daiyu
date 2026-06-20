@@ -142,6 +142,13 @@ class Game {
                 }
                 return;
             }
+            // Tab键重新尝试锁定鼠标
+            if (e.key === 'Tab' && this.gameState === 'playing') {
+                e.preventDefault();
+                this.pointerLockFailed = false;
+                this.lockPointer();
+                return;
+            }
             if (this.gameState !== 'playing' || this.isPaused) return;
             if (e.key.toLowerCase() === 'q') this.playerUseUltimate();
             if (e.key.toLowerCase() === 'e') this.playerUseCharm();
@@ -512,12 +519,12 @@ class Game {
         // 镜中魔镜面碎片交互
         if (this.boss.bossType === 'mirror' && this.boss.sceneMirrorShards) {
             this.boss.sceneMirrorShards.forEach(s => {
-                if (!s.userData.alive && s.userData.alive !== undefined) return;
+                if (s.userData.consumed) return;
                 const dist = s.position.distanceTo(this.player.position);
-                if (dist < 2) {
+                if (dist < 3) {
                     // 踩到碎片：获得镜像buff（攻击范围+50%，3秒）
                     this.player.applySkillBuff('mirror');
-                    s.userData.alive = false;
+                    s.userData.consumed = true;
                     this.scene.remove(s);
                     this.vfx.createDamageNumber(
                         this.player.position.clone().add(new THREE.Vector3(0, 3, 0)),
