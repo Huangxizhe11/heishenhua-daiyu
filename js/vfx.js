@@ -48,44 +48,49 @@ class VFXManager {
     createAttackEffect(position, direction, type = 'normal') {
         const color = type === 'ultimate' ? CONFIG.colors.accent : CONFIG.colors.primary;
 
-        // 剑气斩击弧 - 扇形展开
-        const arcCount = type === 'ultimate' ? 3 : type === 'skill' ? 2 : 1;
-        for (let a = 0; a < arcCount; a++) {
-            const arcGeo = new THREE.RingGeometry(0.8 + a * 1.5, 1.2 + a * 1.5, 16, 1, -0.6, 0.6);
-            const arcMat = new THREE.MeshBasicMaterial({
-                color: color, transparent: true, opacity: 0.9, side: THREE.DoubleSide
+        // 剑气本体 - 扁平椭圆波沿攻击方向飞出
+        const waveCount = type === 'ultimate' ? 3 : type === 'skill' ? 2 : 1;
+        for (let w = 0; w < waveCount; w++) {
+            const waveGeo = new THREE.SphereGeometry(0.6 + w * 0.3, 8, 4);
+            waveGeo.scale(1, 0.15, 2.5);
+            const waveMat = new THREE.MeshBasicMaterial({
+                color: 0xffffff, transparent: true, opacity: 0.9
             });
-            const arc = new THREE.Mesh(arcGeo, arcMat);
-            arc.position.copy(position).add(direction.clone().multiplyScalar(2 + a * 1.5));
-            arc.rotation.x = -Math.PI / 2;
-            arc.rotation.z = -Math.atan2(direction.x, direction.z);
-            this.scene.add(arc);
-            this.particles.push({ mesh: arc, velocity: direction.clone().multiplyScalar(10), life: 0.3, decay: 4 });
+            const wave = new THREE.Mesh(waveGeo, waveMat);
+            wave.position.copy(position).add(direction.clone().multiplyScalar(1.5 + w * 1.2));
+            wave.rotation.y = -Math.atan2(direction.x, direction.z);
+            this.scene.add(wave);
+            this.particles.push({
+                mesh: wave, velocity: direction.clone().multiplyScalar(12),
+                life: 0.3, decay: 4
+            });
         }
 
-        // 剑气能量条 - 沿攻击方向的长条
-        const trailGeo = new THREE.BoxGeometry(0.15, 0.4, 5);
-        const trailMat = new THREE.MeshBasicMaterial({
-            color: 0xffffff, transparent: true, opacity: 0.8
-        });
+        // 白色能量拖尾 - 沿攻击线
+        const trailGeo = new THREE.CylinderGeometry(0.08, 0.08, 4, 6);
+        const trailMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
         const trail = new THREE.Mesh(trailGeo, trailMat);
-        trail.position.copy(position).add(direction.clone().multiplyScalar(2.5));
-        trail.rotation.z = -Math.atan2(direction.x, direction.z);
+        trail.position.copy(position).add(direction.clone().multiplyScalar(2));
+        trail.rotation.z = Math.PI / 2;
+        trail.rotation.y = -Math.atan2(direction.x, direction.z);
         this.scene.add(trail);
-        this.particles.push({ mesh: trail, velocity: direction.clone().multiplyScalar(8), life: 0.25, decay: 5 });
+        this.particles.push({
+            mesh: trail, velocity: direction.clone().multiplyScalar(10),
+            life: 0.2, decay: 5
+        });
 
-        // 能量碎片 - 沿攻击线分布
-        for (let i = 0; i < 8; i++) {
-            const frag = this.createParticle(
-                position.clone().add(direction.clone().multiplyScalar(1 + i * 0.6)),
-                0xffffff, 0.3
+        // 红色剑气尾焰
+        for (let i = 0; i < 6; i++) {
+            const spark = this.createParticle(
+                position.clone().add(direction.clone().multiplyScalar(0.5 + i * 0.5)),
+                color, 0.25
             );
-            frag.velocity = direction.clone().multiplyScalar(12 + Math.random() * 5);
-            frag.life = 0.5;
-            this.particles.push(frag);
+            spark.velocity = direction.clone().multiplyScalar(8 + Math.random() * 4);
+            spark.velocity.y += (Math.random() - 0.5) * 2;
+            spark.life = 0.4;
+            this.particles.push(spark);
         }
 
-        // 花瓣伴随效果
         if (type === 'skill' || type === 'ultimate') {
             for (let i = 0; i < 10; i++) {
                 const angle = (i / 10) * Math.PI * 2;

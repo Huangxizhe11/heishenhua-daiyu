@@ -143,8 +143,11 @@ class Game {
         try { audio.playBGM('prologue'); } catch(e) {}
         try {
             this.showStoryScreen(PROLOGUE, () => {
-                audio.stopBGM();
-                this.showStoryScreen(LEVELS[0].story.intro, () => this.beginLevel());
+                // 不停BGM，直接切到关卡BGM
+                this.showStoryScreen(LEVELS[0].story.intro, () => {
+                    audio.playBGM('level1');
+                    this.beginLevel();
+                });
             });
         } catch(e) {
             this.beginLevel();
@@ -503,7 +506,7 @@ class Game {
 
         audio.playBGM('prologue');
         this.showStoryScreen(level.story.intro, () => {
-            audio.stopBGM();
+            audio.playBGM('level' + (this.currentLevel + 1));
             this.beginLevel();
         });
     }
