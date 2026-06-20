@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>黑神话·林黛玉</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #000; font-family: 'Microsoft YaHei', sans-serif; }
+        canvas { display: block; }
+
+        #start-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000;
+            background: linear-gradient(135deg, #1a0a2e 0%, #16213e 50%, #0f3460 100%);
+        }
+        #start-screen h1 {
+            font-size: 4rem; color: #e94560; text-shadow: 0 0 30px #e94560, 0 0 60px rgba(233,69,96,0.3);
+            margin-bottom: 10px; animation: pulse 2s infinite;
+        }
+        #start-screen .subtitle {
+            color: #a0a0a0; font-size: 1.2rem; margin-bottom: 50px; letter-spacing: 6px;
+        }
+        .menu-buttons { display: flex; flex-direction: column; gap: 15px; position: relative; z-index: 1001; }
+        .menu-btn {
+            padding: 15px 50px !important; font-size: 1.2rem !important; color: #fff !important; background: rgba(255,255,255,0.08) !important;
+            border: 2px solid #e94560 !important; border-radius: 25px; cursor: pointer;
+            transition: all 0.3s; letter-spacing: 4px; min-width: 240px;
+            display: block !important; visibility: visible !important; opacity: 1 !important;
+        }
+        .menu-btn:hover {
+            color: #fff; border-color: #e94560; background: rgba(233,69,96,0.1);
+            box-shadow: 0 0 20px rgba(233,69,96,0.2);
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+
+        .overlay-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.92); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 1001;
+        }
+        .overlay-screen h2 {
+            color: #e94560; font-size: 2rem; margin-bottom: 30px;
+            text-shadow: 0 0 15px #e94560; letter-spacing: 6px;
+        }
+        .controls-grid {
+            display: flex; flex-direction: column; gap: 12px; min-width: 350px;
+        }
+        .control-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 15px; background: rgba(255,255,255,0.03); border-radius: 8px;
+        }
+        .control-row .key {
+            color: #e94560; font-size: 0.9rem; font-weight: bold;
+            min-width: 80px; text-align: center;
+        }
+        .control-row span:last-child { color: #aaa; font-size: 0.9rem; }
+        .credits-content {
+            text-align: center; color: #999; line-height: 2;
+        }
+        .credits-content b { color: #e94560; font-size: 1.2rem; }
+
+        #hud {
+            position: fixed; top: 20px; left: 20px; color: #fff;
+            z-index: 100; pointer-events: none; display: none;
+        }
+        .hud-bar {
+            width: 240px; height: 16px; background: rgba(0,0,0,0.6);
+            border: 2px solid #e94560; border-radius: 8px; margin: 3px 0;
+            overflow: hidden;
+        }
+        .hud-fill { height: 100%; transition: width 0.3s; border-radius: 6px; }
+        #hp-fill { background: linear-gradient(90deg, #e94560, #ff6b6b); width: 100%; }
+        #mp-fill { background: linear-gradient(90deg, #4ecdc4, #44bd9e); width: 100%; border-color: #4ecdc4; }
+        .hud-label { font-size: 0.7rem; color: #aaa; margin-bottom: 1px; letter-spacing: 2px; }
+        #hp-text, #mp-text { font-size: 0.65rem; margin-bottom: 2px; }
+        #hp-text { color: #ff9999; }
+        #mp-text { color: #6dd5c8; }
+
+        #boss-hud {
+            position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+            text-align: center; z-index: 100; pointer-events: none; display: none;
+        }
+        #boss-name {
+            color: #e94560; font-size: 1.2rem; margin-bottom: 6px;
+            text-shadow: 0 0 10px #e94560; letter-spacing: 6px;
+        }
+        #boss-hp-bar {
+            width: 380px; height: 18px; background: rgba(0,0,0,0.6);
+            border: 2px solid #ff6b6b; border-radius: 9px; overflow: hidden;
+        }
+        #boss-hp-fill {
+            height: 100%; background: linear-gradient(90deg, #ff6b6b, #e94560);
+            width: 100%; transition: width 0.3s; border-radius: 7px;
+        }
+        #boss-hp-text { font-size: 0.65rem; color: #ff9999; margin-top: 3px; }
+
+        #skills-bar {
+            position: fixed; bottom: 20px; left: 20px; display: none; gap: 8px;
+            z-index: 100; pointer-events: none;
+        }
+        .skill-slot {
+            width: 48px; height: 48px; background: rgba(0,0,0,0.6);
+            border: 2px solid #555; border-radius: 8px; position: relative;
+            display: flex; align-items: center; justify-content: center;
+            color: #ccc; font-size: 0.6rem; text-align: center; flex-direction: column;
+        }
+        .skill-slot.on-cd { border-color: #333; opacity: 0.4; }
+        .skill-slot .cd-overlay {
+            position: absolute; bottom: 0; left: 0; width: 100%;
+            background: rgba(0,0,0,0.7); transition: height 0.1s linear;
+            border-radius: 0 0 6px 6px; pointer-events: none;
+        }
+        .skill-slot .key-hint {
+            position: absolute; top: -16px; font-size: 0.6rem; color: #888;
+        }
+        .skill-slot .skill-name { font-size: 0.5rem; color: #999; margin-top: 2px; }
+
+        #controls {
+            position: fixed; bottom: 20px; right: 20px; color: #444;
+            font-size: 0.7rem; z-index: 100; pointer-events: none;
+            text-align: right; line-height: 1.8; display: none;
+        }
+
+        #combo {
+            position: fixed; top: 45%; right: 60px; transform: translateY(-50%);
+            color: #e94560; font-size: 2.5rem; font-weight: bold;
+            text-shadow: 0 0 20px #e94560; z-index: 100; pointer-events: none;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        #combo.show { opacity: 1; }
+
+        #poem {
+            position: fixed; top: 20px; right: 20px; color: rgba(255,255,255,0.25);
+            font-style: italic; z-index: 100; pointer-events: none;
+            max-width: 250px; text-align: right; line-height: 1.8; font-size: 0.85rem;
+            display: none;
+        }
+
+        #damage-numbers {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 200;
+        }
+        .dmg-num {
+            position: absolute; font-weight: bold; pointer-events: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
+            animation: dmgFloat 0.9s ease-out forwards;
+        }
+        .dmg-num.normal { color: #ff6b6b; font-size: 1.4rem; }
+        .dmg-num.crit { color: #ffd93d; font-size: 2rem; text-shadow: 0 0 15px #ffd93d, 2px 2px 4px rgba(0,0,0,0.9); }
+        .dmg-num.heal { color: #4ecdc4; font-size: 1.3rem; }
+        .dmg-num.boss { color: #e94560; font-size: 1.6rem; }
+        @keyframes dmgFloat {
+            0% { opacity: 1; transform: translateY(0) scale(1.2); }
+            30% { transform: translateY(-20px) scale(1); }
+            100% { opacity: 0; transform: translateY(-70px) scale(0.7); }
+        }
+
+        #low-hp-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 90;
+            box-shadow: inset 0 0 80px rgba(233,69,96,0);
+            transition: box-shadow 0.3s;
+        }
+        #low-hp-overlay.active {
+            animation: lowHpPulse 1s infinite;
+        }
+        @keyframes lowHpPulse {
+            0%, 100% { box-shadow: inset 0 0 60px rgba(233,69,96,0.1); }
+            50% { box-shadow: inset 0 0 100px rgba(233,69,96,0.35); }
+        }
+
+        #hp-heartbeat-ring {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 200px; height: 200px; border-radius: 50%;
+            border: 3px solid rgba(233,69,96,0);
+            box-shadow: 0 0 30px rgba(233,69,96,0), inset 0 0 30px rgba(233,69,96,0);
+            pointer-events: none; z-index: 91;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        #hp-heartbeat-ring.active {
+            opacity: 1;
+            animation: heartbeatRing 0.9s ease-in-out infinite;
+        }
+        @keyframes heartbeatRing {
+            0% { transform: translate(-50%, -50%) scale(0.85); border-color: rgba(233,69,96,0.1); box-shadow: 0 0 15px rgba(233,69,96,0.05), inset 0 0 15px rgba(233,69,96,0.05); }
+            15% { transform: translate(-50%, -50%) scale(1.15); border-color: rgba(233,69,96,0.7); box-shadow: 0 0 40px rgba(233,69,96,0.5), inset 0 0 40px rgba(233,69,96,0.15); }
+            30% { transform: translate(-50%, -50%) scale(0.95); border-color: rgba(233,69,96,0.2); box-shadow: 0 0 20px rgba(233,69,96,0.1), inset 0 0 20px rgba(233,69,96,0.05); }
+            45% { transform: translate(-50%, -50%) scale(1.1); border-color: rgba(233,69,96,0.55); box-shadow: 0 0 35px rgba(233,69,96,0.4), inset 0 0 30px rgba(233,69,96,0.1); }
+            60%, 100% { transform: translate(-50%, -50%) scale(0.85); border-color: rgba(233,69,96,0.05); box-shadow: 0 0 10px rgba(233,69,96,0.02), inset 0 0 10px rgba(233,69,96,0.02); }
+        }
+
+        #game-over, #victory-screen, #ending-screen, #pause-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+        #game-over { background: linear-gradient(135deg, #1a0a0a 0%, #2e0a0a 50%, #3e0f0f 100%); }
+        #victory-screen { background: linear-gradient(135deg, #0a1a0a 0%, #0a2e1a 50%, #0f3e2e 100%); }
+        #ending-screen { background: linear-gradient(135deg, #0a0a2e 0%, #1a0a3e 50%, #2e1a4e 100%); }
+        #pause-screen { background: rgba(0,0,0,0.85); backdrop-filter: blur(4px); }
+        #game-over h1, #victory-screen h1, #ending-screen h1 {
+            font-size: 3rem; margin-bottom: 15px; text-shadow: 0 0 20px currentColor;
+        }
+        #game-over h1 { color: #e94560; }
+        #victory-screen h1 { color: #4ecdc4; }
+        #ending-screen h1 { color: #ffd93d; }
+        #pause-screen h1 { color: #fff; font-size: 2.5rem; margin-bottom: 30px; }
+        #pause-screen p { color: #888; font-size: 0.9rem; margin-bottom: 5px; }
+        #game-over p, #victory-screen p, #ending-screen p { color: #999; font-size: 1rem; margin-bottom: 8px; }
+        .restart-hint {
+            margin-top: 30px; color: #777; font-size: 0.9rem; animation: pulse 2s infinite; cursor: pointer;
+        }
+        #victory-level { color: #888; font-size: 0.85rem; margin-bottom: 5px; }
+        #victory-boss-name { color: #4ecdc4; font-size: 1.1rem; margin-bottom: 15px; }
+
+        #loot-list { margin-top: 15px; text-align: left; }
+        .loot-item {
+            padding: 8px 12px; margin: 6px 0;
+            background: rgba(255,255,255,0.05); border-radius: 8px;
+            border-left: 3px solid #4ecdc4; color: #ddd; font-size: 0.95rem;
+            line-height: 1.5;
+        }
+        .loot-dot {
+            display: inline-block; width: 10px; height: 10px;
+            border-radius: 50%; margin-right: 8px; vertical-align: middle;
+        }
+
+        #boss-intro {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #e94560; font-size: 2.5rem; text-shadow: 0 0 30px #e94560;
+            z-index: 150; pointer-events: none; opacity: 0;
+            transition: opacity 0.8s; letter-spacing: 10px;
+        }
+
+        #crosshair {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 16px; height: 16px; z-index: 100; pointer-events: none;
+            display: none; opacity: 0.3;
+        }
+        #crosshair::before, #crosshair::after {
+            content: ''; position: absolute; background: rgba(255,255,255,0.8);
+        }
+        #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+        #crosshair::after { height: 2px; width: 100%; top: 50%; transform: translateY(-50%); }
+
+        #phase-text {
+            position: fixed; top: 35%; left: 50%; transform: translateX(-50%);
+            color: #ffd93d; font-size: 1.5rem; text-shadow: 0 0 20px #ffd93d;
+            z-index: 150; pointer-events: none; opacity: 0; transition: opacity 0.5s;
+            letter-spacing: 4px;
+        }
+
+        #level-text {
+            position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
+            color: rgba(255,255,255,0.3); font-size: 0.75rem;
+            z-index: 100; pointer-events: none; letter-spacing: 4px;
+            display: none;
+        }
+
+        .lock-hint {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: rgba(255,255,255,0.8); font-size: 1.5rem; z-index: 500;
+            pointer-events: none; display: none; text-align: center; line-height: 2.5;
+            text-shadow: 0 0 20px rgba(233,69,96,0.5);
+            background: rgba(0,0,0,0.7); padding: 30px 50px; border-radius: 15px;
+            border: 1px solid rgba(233,69,96,0.3);
+        }
+
+        #loot-toast {
+            position: fixed; top: 20%; left: 50%; transform: translateX(-50%);
+            z-index: 300; pointer-events: none; text-align: center; opacity: 0;
+            transition: opacity 0.5s;
+        }
+        #loot-toast .toast-title {
+            color: #ffd93d; font-size: 1.5rem; text-shadow: 0 0 15px #ffd93d;
+            margin-bottom: 8px; letter-spacing: 4px;
+        }
+        #loot-toast .toast-item {
+            color: #ddd; font-size: 1rem; margin: 4px 0;
+            text-shadow: 0 0 8px rgba(0,0,0,0.8);
+        }
+
+        #story-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #1a0a2e 0%, #0f0a1a 100%); display: none; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 2000;
+        }
+        #story-text {
+            max-width: 600px; text-align: center; color: #ccc;
+            font-size: 1.1rem; line-height: 2.2; padding: 20px;
+        }
+        .story-line {
+            margin: 8px 0; min-height: 1.5em;
+            transition: opacity 0.5s;
+        }
+        #story-continue {
+            display: none; margin-top: 40px; padding: 12px 40px;
+            color: #888; background: transparent; border: 1px solid #555;
+            border-radius: 20px; cursor: pointer; font-size: 1rem;
+            transition: all 0.3s; letter-spacing: 4px;
+        }
+        #story-continue:hover {
+            color: #fff; border-color: #e94560;
+        }
+
+        #ending-screen {
+            background: linear-gradient(135deg, #0a0a2e 0%, #1a0a3e 50%, #2e1a4e 100%);
+        }
+        #ending-screen .ending-text {
+            max-width: 550px; text-align: center; color: rgba(255,255,255,0.7);
+            font-size: 1rem; line-height: 2.5; margin-bottom: 20px;
+        }
+        #ending-screen .ending-poem {
+            color: rgba(255,255,255,0.4); font-style: italic;
+            font-size: 0.95rem; line-height: 2.2; margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="start-screen">
+        <h1>黑神话·林黛玉</h1>
+        <div class="subtitle">潇湘妃子，降世除魔</div>
+        <div class="menu-buttons">
+            <button id="start-btn" class="menu-btn">开始游戏</button>
+            <button id="controls-btn" class="menu-btn">操作说明</button>
+            <button id="credits-btn" class="menu-btn">制作信息</button>
+        </div>
+    </div>
+
+    <div id="controls-screen" class="overlay-screen" style="display:none;">
+        <h2>操作说明</h2>
+        <div class="controls-grid">
+            <div class="control-row"><span class="key">W A S D</span><span>移动</span></div>
+            <div class="control-row"><span class="key">鼠标</span><span>控制视角</span></div>
+            <div class="control-row"><span class="key">左键</span><span>葬花剑（普攻）</span></div>
+            <div class="control-row"><span class="key">右键</span><span>泪雨术（技能）</span></div>
+            <div class="control-row"><span class="key">空格</span><span>翻滚闪避</span></div>
+            <div class="control-row"><span class="key">Q</span><span>天魁星（大招）</span></div>
+            <div class="control-row"><span class="key">E</span><span>颦颦一笑（治疗+眩晕）</span></div>
+            <div class="control-row"><span class="key">ESC</span><span>暂停</span></div>
+        </div>
+        <button id="controls-back" class="menu-btn" style="margin-top:30px;">返 回</button>
+    </div>
+
+    <div id="credits-screen" class="overlay-screen" style="display:none;">
+        <h2>制作信息</h2>
+        <div class="credits-content">
+            <p><b>黑神话·林黛玉</b></p>
+            <p>腾讯黑客松参赛作品</p>
+            <br>
+            <p>灵感来源：《黑神话：悟空》×《红楼梦》</p>
+            <p>技术栈：Three.js + WebAudio API</p>
+            <p>所有图形、音效均为程序化生成</p>
+            <br>
+            <p style="color:#666;font-size:0.8rem;">本作品仅为技术演示，非商业用途</p>
+        </div>
+        <button id="credits-back" class="menu-btn" style="margin-top:30px;">返 回</button>
+    </div>
+
+    <div id="story-screen">
+        <div id="story-text"></div>
+        <button id="story-continue">继 续</button>
+    </div>
+
+    <div id="hud">
+        <div class="hud-label">生命</div>
+        <div class="hud-bar"><div class="hud-fill" id="hp-fill"></div></div>
+        <div id="hp-text"></div>
+        <div class="hud-label">灵力</div>
+        <div class="hud-bar" style="border-color:#4ecdc4;"><div class="hud-fill" id="mp-fill"></div></div>
+        <div id="mp-text"></div>
+    </div>
+
+    <div id="boss-hud">
+        <div id="boss-name"></div>
+        <div id="boss-hp-bar"><div id="boss-hp-fill"></div></div>
+        <div id="boss-hp-text"></div>
+    </div>
+
+    <div id="skills-bar">
+        <div class="skill-slot" id="skill-q">
+            <span class="key-hint">Q</span>
+            <span>天魁星</span>
+            <div class="cd-overlay" id="cd-q"></div>
+        </div>
+        <div class="skill-slot" id="skill-e">
+            <span class="key-hint">E</span>
+            <span>颦颦一笑</span>
+            <div class="cd-overlay" id="cd-e"></div>
+        </div>
+    </div>
+
+    <div id="controls">
+        WASD - 移动<br>
+        鼠标 - 视角<br>
+        左键 - 葬花剑<br>
+        右键 - 泪雨术<br>
+        空格 - 翻滚<br>
+        Q - 天魁星<br>
+        E - 颦颦一笑
+    </div>
+
+    <div id="combo"></div>
+    <div id="poem">花谢花飞花满天，<br>红消香断有谁怜？</div>
+    <div id="level-text"></div>
+    <div id="damage-numbers"></div>
+    <div id="low-hp-overlay"></div>
+    <div id="hp-heartbeat-ring"></div>
+    <div id="crosshair"></div>
+    <div id="boss-intro"></div>
+    <div id="phase-text"></div>
+    <div id="loot-toast"><div class="toast-title">掉落物</div><div id="toast-items"></div></div>
+    <div class="lock-hint" id="lock-hint">🖱️ 点击屏幕锁定鼠标<br>锁定后即可攻击和旋转视角<br>按 ESC 释放鼠标</div>
+
+    <div id="game-over">
+        <h1>魂归离恨天</h1>
+        <p>林黛玉已陨落</p>
+        <div class="restart-hint">点击重新开始</div>
+    </div>
+
+    <div id="pause-screen">
+        <h1>暂 停</h1>
+        <p>ESC 继续游戏</p>
+        <button id="pause-resume" style="margin-top:25px;padding:10px 40px;color:#fff;background:transparent;border:1px solid #666;border-radius:20px;cursor:pointer;font-size:1rem;transition:all 0.3s;letter-spacing:3px;">继 续</button>
+    </div>
+
+    <div id="victory-screen">
+        <h1>降魔成功</h1>
+        <div id="victory-level"></div>
+        <div id="victory-boss-name"></div>
+        <div id="loot-list"></div>
+        <div class="restart-hint">点击进入下一关</div>
+    </div>
+
+    <div id="ending-screen">
+        <h1>功德圆满</h1>
+        <div class="ending-text">
+            太虚幻境恢复了平静，人间的妖魔被尽数驱散。<br>
+            林黛玉站在花海之中，微风拂过她的衣袂。
+        </div>
+        <div class="ending-poem">
+            花谢花飞花满天，红消香断有谁怜？<br>
+            侬今葬花人笑痴，他年葬侬知是谁？<br>
+            试看春残花渐落，便是红颜老死时。<br>
+            一朝春尽红颜老，花落人亡两不知。
+        </div>
+        <p style="color:#666;font-size:0.8rem;margin-top:30px;">黑神话·林黛玉 — 完</p>
+        <div class="restart-hint">点击重新开始</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/levels.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/world.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/boss.js"></script>
+    <script src="js/vfx.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
